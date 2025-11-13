@@ -91,7 +91,6 @@ mypy src/gitreleasegen
 Use descriptive branch names:
 - `feature/your-feature-name` for new features
 - `fix/bug-description` for bug fixes
-- `docs/what-changed` for documentation updates
 - `refactor/area-improved` for refactoring
 
 ### Commit Messages
@@ -206,7 +205,6 @@ def parse_commit_message(message: str) -> ParsedCommitMessage:
 
 - Update `README.md` for user-facing changes
 - Add examples to `examples/` directory
-- Update `docs/` for architectural changes
 
 ## Adding New Features
 
@@ -243,7 +241,6 @@ gitreleasegen/
 │   ├── models.py           # Data models
 │   └── formatters/         # Output formatters
 ├── tests/                  # Test suite
-├── docs/                   # Documentation
 ├── examples/               # Usage examples
 └── pyproject.toml          # Project configuration
 ```
