@@ -1,0 +1,41 @@
+from pathlib import Path
+
+import git
+
+from gitreleasegen.git_client import CommitRange, GitRepository
+
+
+def create_commit(
+    repo: git.Repo, base_path: Path, relative: str, content: str, message: str
+) -> git.Commit:
+    file_path = base_path / relative
+    file_path.write_text(content, encoding="utf-8")
+    repo.index.add([relative])
+    actor = git.Actor("Test User", "test@example.com")
+    return repo.index.commit(message, author=actor, committer=actor)
+
+
+def test_git_repository_iter_commits_and_tags(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    first_commit = create_commit(
+        repo, Path(tmp_path), "README.md", "Initial", "chore: initial commit"
+    )
+    repo.create_tag("v0.1.0", ref=first_commit)
+
+    second_commit = create_commit(
+        repo, Path(tmp_path), "app.py", "print('hi')\n", "feat: add app entrypoint"
+    )
+    repo.create_tag("v0.2.0", ref=second_commit)
+
+    git_repo = GitRepository(tmp_path)
+    tags = git_repo.list_tags()
+    assert [tag.name for tag in tags] == ["v0.2.0", "v0.1.0"]
+
+    commit_range = CommitRange(since="v0.1.0", until="HEAD", include_merges=False)
+    commits = list(git_repo.iter_commits(commit_range))
+
+    assert len(commits) == 1
+    commit = commits[0]
+    assert commit.subject == "feat: add app entrypoint"
+    assert commit.author_name == "Test User"
+    assert commit.sha == second_commit.hexsha

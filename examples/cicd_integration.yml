@@ -1,0 +1,58 @@
+name: Auto-Generate Release Notes
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  generate-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper changelog generation
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install GitReleaseGen
+        run: pip install gitreleasegen
+
+      - name: Generate release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          # Generate AI-powered notes if API key is available
+          if [ -n "$OPENROUTER_API_KEY" ]; then
+            gitreleasegen generate \
+              --unreleased \
+              --use-llm \
+              --llm-provider openrouter \
+              --format markdown \
+              --out RELEASE_NOTES.md
+          else
+            gitreleasegen generate \
+              --unreleased \
+              --format markdown \
+              --out RELEASE_NOTES.md
+          fi
+
+      - name: Update release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release notes as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md

@@ -1,0 +1,348 @@
+"""Command-line interface for GitReleaseGenerator."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+
+import typer
+
+from .changelog import ChangelogBuilder
+from .formatters import html as html_formatter
+from .formatters import markdown as markdown_formatter
+from .formatters import text as text_formatter
+from .git_client import CommitRange, GitRepository, TagInfo
+from .github_client import GitHubClient, GitHubSettings
+from .models import Changelog, CommitInfo, PullRequestInfo
+from .summarizer import BaseSummarizer, PromptEngineeredSummarizer
+
+APP_NAME = "GitReleaseGenerator"
+DEFAULT_SUMMARY_CACHE = Path(".gitreleasegen-cache/summaries.json")
+PR_NUMBER_PATTERN = re.compile(
+    r"(?:\(#(?P<num_paren>\d+)\))|(?:pull request #(?P<num_pr>\d+))|(?:pr #(?P<num_alt>\d+))",
+    re.IGNORECASE,
+)
+MERGE_PR_PATTERN = re.compile(r"merge pull request #(\d+)", re.IGNORECASE)
+
+
+def _typer_app() -> typer.Typer:
+    return typer.Typer(help="Generate release notes from Git repositories.", no_args_is_help=True)
+
+
+app = _typer_app()
+
+
+class OutputFormat(str, Enum):
+    markdown = "markdown"
+    html = "html"
+    text = "text"
+
+
+class RagBackend(str, Enum):
+    simple = "simple"
+    chroma = "chroma"
+
+
+@dataclass
+class RangeContext:
+    since_ref: Optional[str]
+    until_ref: Optional[str]
+    since_tag: Optional[TagInfo]
+    until_tag: Optional[TagInfo]
+
+
+@app.command()
+def generate(
+    repo: Path = typer.Option(
+        Path.cwd(),
+        "--repo",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+        help="Repository path.",
+    ),
+    since_tag: Optional[str] = typer.Option(None, help="Commits after this tag."),
+    until_tag: Optional[str] = typer.Option(None, help="Commits up to this tag."),
+    since: Optional[str] = typer.Option(None, help="Commits after this ref."),
+    until: Optional[str] = typer.Option(None, help="Commits up to this ref."),
+    unreleased: bool = typer.Option(False, help="HEAD vs latest tag."),
+    output_format: OutputFormat = typer.Option(
+        OutputFormat.markdown, "--format", case_sensitive=False
+    ),
+    out: Optional[Path] = typer.Option(None, help="Output file path."),
+    use_llm: bool = typer.Option(False, help="Use AI summaries."),
+    llm_provider: str = typer.Option("openai", help="AI provider (openai/openrouter)."),
+    openai_model: str = typer.Option("gpt-4o-mini", help="OpenAI model."),
+    openai_api_key: Optional[str] = typer.Option(
+        None, envvar="OPENAI_API_KEY", help="OpenAI API key."
+    ),
+    openrouter_model: str = typer.Option(
+        "meta-llama/llama-3.3-8b-instruct:free", help="OpenRouter model."
+    ),
+    openrouter_api_key: Optional[str] = typer.Option(
+        None, envvar="OPENROUTER_API_KEY", help="OpenRouter API key."
+    ),
+    github_token: Optional[str] = typer.Option(
+        None, envvar="GITHUB_TOKEN", help="GitHub API token."
+    ),
+    include_scopes: bool = typer.Option(
+        True, "--include-scopes/--no-include-scopes", help="Show commit scopes."
+    ),
+    no_prs: bool = typer.Option(False, help="Skip PR lookups."),
+    no_merge_commits: bool = typer.Option(False, help="Exclude merge commits."),
+    max_items: Optional[int] = typer.Option(None, help="Limit commits."),
+    summary_cache: Optional[Path] = typer.Option(None, help="Cache file path."),
+    fail_on_empty: bool = typer.Option(False, help="Exit on no commits."),
+    domain_scope: Optional[str] = typer.Option(
+        None,
+        help="Domain scope for the system prompt (e.g., 'software release notes', 'conservation').",
+    ),
+    expert_role: Optional[List[str]] = typer.Option(
+        None,
+        "--expert-role",
+        help="Add a role for multi-expert prompting (repeatable). Defaults: Product Manager, Tech Lead, QA Engineer.",
+    ),
+    rag_backend: RagBackend = typer.Option(
+        RagBackend.simple,
+        help="RAG backend: 'simple' (keyword) or 'chroma' (best-effort, optional dependency).",
+    ),
+) -> None:
+    """Generate release notes from commit history."""
+
+    repo = repo.resolve()
+    git_repo = GitRepository(repo)
+
+    commit_range, context = _resolve_commit_range(
+        git_repo,
+        since_tag=since_tag,
+        until_tag=until_tag,
+        since=since,
+        until=until,
+        unreleased=unreleased,
+        include_merges=not no_merge_commits,
+        max_items=max_items,
+    )
+
+    commits = list(git_repo.iter_commits(commit_range))
+    if not commits:
+        message = "No commits found for the selected range."
+        if fail_on_empty:
+            typer.echo(message, err=True)
+            raise typer.Exit(code=1)
+        typer.echo(message)
+        return
+
+    _attach_pr_numbers(commits)
+
+    owner_repo = git_repo.get_github_slug()
+    pr_index: Dict[int, PullRequestInfo] = {}
+    commit_prs: Dict[str, List[PullRequestInfo]] = {}
+    github_client: Optional[GitHubClient] = None
+    try:
+        if not no_prs and owner_repo:
+            settings = GitHubSettings(owner=owner_repo[0], repo=owner_repo[1], token=github_token)
+            github_client = GitHubClient(settings)
+            pr_index, commit_prs = _enrich_with_pull_requests(github_client, commits)
+    finally:
+        if github_client:
+            github_client.close()
+
+    summarizer: Optional[BaseSummarizer] = None
+    if use_llm:
+        cache_path = summary_cache or (repo / DEFAULT_SUMMARY_CACHE)
+        rag_backend_value = rag_backend.value
+        summarizer_kwargs = {
+            "cache_path": cache_path,
+            "domain_scope": domain_scope,
+            "expert_roles": expert_role,
+            "rag_backend": rag_backend_value,
+        }
+        if llm_provider.lower() == "openrouter":
+            summarizer = PromptEngineeredSummarizer(
+                api_key=openrouter_api_key,
+                model=openrouter_model,
+                base_url="https://openrouter.ai/api/v1",
+                **summarizer_kwargs,
+            )
+        else:
+            summarizer = PromptEngineeredSummarizer(
+                api_key=openai_api_key,
+                model=openai_model,
+                **summarizer_kwargs,
+            )
+
+    builder = ChangelogBuilder(
+        summarizer=summarizer,
+        include_scopes=include_scopes,
+        dedupe_prs=not no_prs,
+    )
+
+    version = None
+    if context.until_tag:
+        version = context.until_tag.name
+    elif context.until_ref and context.until_ref != "HEAD":
+        version = context.until_ref
+
+    changelog = builder.build(
+        release_date=datetime.now(timezone.utc),
+        commits=commits,
+        commit_prs=commit_prs,
+        pr_index=pr_index,
+        version=version,
+    )
+
+    compare_url = _compute_compare_url(owner_repo, context)
+    if compare_url:
+        changelog.metadata["compare_url"] = compare_url
+
+    output = _render_output(changelog, output_format)
+    _write_output(output, out)
+    typer.echo(
+        f"Generated changelog with {sum(len(section.items) for section in changelog.sections)} entries."
+    )
+
+
+def _resolve_commit_range(
+    repo: GitRepository,
+    *,
+    since_tag: Optional[str],
+    until_tag: Optional[str],
+    since: Optional[str],
+    until: Optional[str],
+    unreleased: bool,
+    include_merges: bool,
+    max_items: Optional[int],
+) -> Tuple[CommitRange, RangeContext]:
+    tags = repo.list_tags()
+
+    resolved_since_tag = _find_tag(tags, since_tag) if since_tag else None
+    resolved_until_tag = _find_tag(tags, until_tag) if until_tag else None
+
+    since_ref = resolved_since_tag.name if resolved_since_tag else since
+    until_ref = resolved_until_tag.name if resolved_until_tag else until or "HEAD"
+
+    if unreleased and not since_ref:
+        latest_tag = resolved_since_tag or (tags[0] if tags else None)
+        if latest_tag:
+            since_ref = latest_tag.name
+            resolved_since_tag = latest_tag
+
+    commit_range = CommitRange(
+        since=since_ref,
+        until=until_ref,
+        include_merges=include_merges,
+        max_count=max_items,
+    )
+
+    context = RangeContext(
+        since_ref=since_ref,
+        until_ref=until_ref,
+        since_tag=resolved_since_tag,
+        until_tag=resolved_until_tag,
+    )
+    return commit_range, context
+
+
+def _find_tag(tags: Sequence[TagInfo], name: Optional[str]) -> Optional[TagInfo]:
+    if not name:
+        return None
+    for tag in tags:
+        if tag.name == name:
+            return tag
+    return None
+
+
+def _attach_pr_numbers(commits: Iterable[CommitInfo]) -> None:
+    for commit in commits:
+        pr_number = (
+            _extract_pr_number(commit.subject)
+            or _extract_pr_number(commit.body)
+            or _extract_pr_number(commit.message)
+        )
+        if pr_number:
+            commit.pr_number = pr_number
+
+
+def _extract_pr_number(message: Optional[str]) -> Optional[int]:
+    if not message:
+        return None
+    match = PR_NUMBER_PATTERN.search(message)
+    if match:
+        for group_name in ("num_paren", "num_pr", "num_alt"):
+            value = match.group(group_name)
+            if value:
+                return int(value)
+    merge_match = MERGE_PR_PATTERN.search(message)
+    if merge_match:
+        return int(merge_match.group(1))
+    return None
+
+
+def _enrich_with_pull_requests(
+    client: GitHubClient,
+    commits: Sequence[CommitInfo],
+) -> Tuple[Dict[int, PullRequestInfo], Dict[str, List[PullRequestInfo]]]:
+    pr_index: Dict[int, PullRequestInfo] = {}
+    commit_prs: Dict[str, List[PullRequestInfo]] = {}
+
+    unique_numbers = sorted(
+        {int(commit.pr_number) for commit in commits if commit.pr_number is not None}
+    )
+    for number in unique_numbers:
+        pr = client.get_pull_request(number)
+        if pr:
+            pr_index[number] = pr
+
+    for commit in commits:
+        if commit.pr_number and commit.pr_number in pr_index:
+            continue
+        prs = client.find_pull_requests_by_commit(commit.sha)
+        if prs:
+            commit_prs[commit.sha] = prs
+            if not commit.pr_number:
+                commit.pr_number = prs[0].number
+                pr_index.setdefault(prs[0].number, prs[0])
+    return pr_index, commit_prs
+
+
+def _compute_compare_url(
+    owner_repo: Optional[Tuple[str, str]], context: RangeContext
+) -> Optional[str]:
+    if not owner_repo:
+        return None
+    if not context.since_ref or not context.until_ref:
+        return None
+    owner, repo = owner_repo
+    return f"https://github.com/{owner}/{repo}/compare/{context.since_ref}...{context.until_ref}"
+
+
+def _render_output(changelog: Changelog, output_format: OutputFormat) -> str:
+    if output_format is OutputFormat.markdown:
+        return markdown_formatter.render_markdown(changelog)
+    if output_format is OutputFormat.html:
+        return html_formatter.render_html(changelog)
+    if output_format is OutputFormat.text:
+        return text_formatter.render_text(changelog)
+    raise typer.BadParameter(f"Unsupported format: {output_format}")
+
+
+def _write_output(content: str, destination: Optional[Path]) -> None:
+    if destination:
+        destination = destination.expanduser().resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+        typer.echo(f"Wrote changelog to {destination}")
+    else:
+        typer.echo(content)
+
+
+def main() -> None:  # pragma: no cover - console entrypoint
+    app()
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
