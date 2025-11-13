@@ -1,5 +1,0 @@
-{
-  "buildCommand": "echo 'Using pre-built site'",
-  "outputDirectory": "docs/_site",
-  "installCommand": "echo 'No install needed'"
-}
