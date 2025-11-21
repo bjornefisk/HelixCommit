@@ -92,6 +92,9 @@ def generate(
     include_scopes: bool = typer.Option(
         True, "--include-scopes/--no-include-scopes", help="Show commit scopes."
     ),
+    include_diffs: bool = typer.Option(
+        False, "--include-diffs", help="Include commit diffs for AI summarization."
+    ),
     no_prs: bool = typer.Option(False, help="Skip PR lookups."),
     no_merge_commits: bool = typer.Option(False, help="Exclude merge commits."),
     max_items: Optional[int] = typer.Option(None, help="Limit commits."),
@@ -127,7 +130,7 @@ def generate(
         max_items=max_items,
     )
 
-    commits = list(git_repo.iter_commits(commit_range))
+    commits = list(git_repo.iter_commits(commit_range, include_diffs=include_diffs))
     if not commits:
         message = "No commits found for the selected range."
         if fail_on_empty:
@@ -175,25 +178,18 @@ def generate(
                 **summarizer_kwargs,
             )
 
+    # Build changelog
     builder = ChangelogBuilder(
+        repo=git_repo,
+        github=github_client,
         summarizer=summarizer,
         include_scopes=include_scopes,
-        dedupe_prs=not no_prs,
+        no_prs=no_prs,
+        no_merge_commits=no_merge_commits,
+        max_items=max_items,
+        include_diffs=include_diffs,
     )
-
-    version = None
-    if context.until_tag:
-        version = context.until_tag.name
-    elif context.until_ref and context.until_ref != "HEAD":
-        version = context.until_ref
-
-    changelog = builder.build(
-        release_date=datetime.now(timezone.utc),
-        commits=commits,
-        commit_prs=commit_prs,
-        pr_index=pr_index,
-        version=version,
-    )
+    changelog = builder.build(range_context)
 
     compare_url = _compute_compare_url(owner_repo, context)
     if compare_url:

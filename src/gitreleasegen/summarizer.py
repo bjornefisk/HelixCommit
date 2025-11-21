@@ -36,6 +36,7 @@ class SummaryRequest:
     identifier: str
     title: str
     body: Optional[str] = None
+    diff: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -143,6 +144,7 @@ class OpenAISummarizer(BaseSummarizer):
                         "id": req.identifier,
                         "title": req.title,
                         "body": req.body or "",
+                        "diff": req.diff or "",
                     }
                     for req in requests
                 ]
@@ -150,6 +152,7 @@ class OpenAISummarizer(BaseSummarizer):
             message_content = (
                 "Rewrite each change entry into a concise, release-note ready sentence (<= 30 words). "
                 "Capture the impact, mention affected area if obvious, and avoid repetition. "
+                "Use the provided diffs to understand the actual changes if the commit message is sparse. "
                 'Respond with JSON object {"entries": [{"id": str, "summary": str}, ...]} in the same order as input.\n\n'
                 + json.dumps(payload, ensure_ascii=False)
             )
@@ -182,7 +185,7 @@ class OpenAISummarizer(BaseSummarizer):
             return [req.title for req in requests]
 
     def _cache_key(self, request: SummaryRequest) -> str:
-        content = f"{request.identifier}|{request.title}|{request.body or ''}|{self.model}|{self.prompt_version}"
+        content = f"{request.identifier}|{request.title}|{request.body or ''}|{request.diff or ''}|{self.model}|{self.prompt_version}"
         digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return digest
 
@@ -256,6 +259,7 @@ class OpenRouterSummarizer(BaseSummarizer):
                         "id": req.identifier,
                         "title": req.title,
                         "body": req.body or "",
+                        "diff": req.diff or "",
                     }
                     for req in requests
                 ]
@@ -263,6 +267,7 @@ class OpenRouterSummarizer(BaseSummarizer):
             message_content = (
                 "Rewrite each change entry into a concise, release-note ready sentence (<= 30 words). "
                 "Capture the impact, mention affected area if obvious, and avoid repetition. "
+                "Use the provided diffs to understand the actual changes if the commit message is sparse. "
                 'Respond with JSON object {"entries": [{"id": str, "summary": str}, ...]} in the same order as input.\n\n'
                 + json.dumps(payload, ensure_ascii=False)
             )
@@ -295,7 +300,7 @@ class OpenRouterSummarizer(BaseSummarizer):
             return [req.title for req in requests]
 
     def _cache_key(self, request: SummaryRequest) -> str:
-        content = f"{request.identifier}|{request.title}|{request.body or ''}|{self.model}|{self.prompt_version}"
+        content = f"{request.identifier}|{request.title}|{request.body or ''}|{request.diff or ''}|{self.model}|{self.prompt_version}"
         digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return digest
 
@@ -399,7 +404,10 @@ class PromptEngineeredSummarizer(BaseSummarizer):
             planning = self._plan_queries(system_prompt, req)
             evidence = self._gather_evidence(req, planning)
             if evidence:
-                context_blocks.append("Relevant context:\n" + evidence)
+                context_blocks.append("Relevant context from body:\n" + evidence)
+        
+        if req.diff:
+            context_blocks.append("Code changes (diff):\n" + req.diff)
 
         base_user = (
             "Rewrite the change into a concise, release-note ready sentence (<= 30 words).\n"
@@ -616,7 +624,7 @@ class PromptEngineeredSummarizer(BaseSummarizer):
             f"rag={int(self.enable_rag)}:{self.rag_backend}|crit={int(self.enable_self_critique)}|"
             f"model={self.model}|pv={self.prompt_version}"
         )
-        content = f"{request.identifier}|{request.title}|{request.body or ''}|{flags}"
+        content = f"{request.identifier}|{request.title}|{request.body or ''}|{request.diff or ''}|{flags}"
         digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return digest
 

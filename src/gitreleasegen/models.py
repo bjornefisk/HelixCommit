@@ -21,6 +21,7 @@ class CommitInfo:
     is_merge: bool = False
     pr_number: Optional[int] = None
     labels: List[str] = field(default_factory=list)
+    diff: Optional[str] = None
 
     @property
     def message(self) -> str:

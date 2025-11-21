@@ -208,15 +208,30 @@ class ChangelogBuilder:
     def _build_summary_request(self, bucket: ChangeBucket) -> SummaryRequest:
         title = self._default_title(bucket)
         body_parts: List[str] = []
+        diff_parts: List[str] = []
+        
         if bucket.pull_request and bucket.pull_request.body:
             body_parts.append(bucket.pull_request.body.strip())
         for entry in bucket.commits:
             body = entry.parsed.body
             if body:
                 body_parts.append(body)
+            if entry.commit.diff:
+                diff_parts.append(f"Diff for {entry.commit.short_sha()}:\n{entry.commit.diff}")
+                
         body_text = "\n\n".join(body_parts)
         body_text = _truncate(body_text, self.summary_body_limit)
-        return SummaryRequest(identifier=bucket.identifier, title=title, body=body_text or None)
+        
+        diff_text = "\n\n".join(diff_parts)
+        # Truncate total diff text to avoid massive context
+        diff_text = _truncate(diff_text, 4000)
+        
+        return SummaryRequest(
+            identifier=bucket.identifier, 
+            title=title, 
+            body=body_text or None,
+            diff=diff_text or None
+        )
 
     def _bucket_identifier(
         self, entry: CommitEntry, pull_request: Optional[PullRequestInfo]

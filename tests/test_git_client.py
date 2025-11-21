@@ -39,3 +39,29 @@ def test_git_repository_iter_commits_and_tags(tmp_path):
     assert commit.subject == "feat: add app entrypoint"
     assert commit.author_name == "Test User"
     assert commit.sha == second_commit.hexsha
+
+
+def test_git_repository_include_diffs(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    create_commit(
+        repo, Path(tmp_path), "README.md", "Initial", "chore: initial commit"
+    )
+
+    # Change file content to generate diff
+    create_commit(
+        repo, Path(tmp_path), "README.md", "Initial\nUpdated", "feat: update readme"
+    )
+
+    git_repo = GitRepository(tmp_path)
+    commit_range = CommitRange(max_count=1)
+
+    # Test without diffs
+    commits = list(git_repo.iter_commits(commit_range, include_diffs=False))
+    assert len(commits) == 1
+    assert commits[0].diff is None
+
+    # Test with diffs
+    commits = list(git_repo.iter_commits(commit_range, include_diffs=True))
+    assert len(commits) == 1
+    assert commits[0].diff is not None
+    assert "Updated" in commits[0].diff

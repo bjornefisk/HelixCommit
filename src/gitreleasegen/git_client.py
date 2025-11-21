@@ -76,12 +76,40 @@ class GitRepository:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def iter_commits(self, commit_range: CommitRange) -> Iterator[CommitInfo]:
+    def iter_commits(
+        self, commit_range: CommitRange, include_diffs: bool = False
+    ) -> Iterator[CommitInfo]:
         """Iterate over commits in the given range."""
         if self._use_gitpython:
-            yield from self._iter_commits_gitpython(commit_range)
+            yield from self._iter_commits_gitpython(commit_range, include_diffs=include_diffs)
         else:
-            yield from self._iter_commits_cli(commit_range)
+            yield from self._iter_commits_cli(commit_range, include_diffs=include_diffs)
+
+    def get_commit_diff(self, sha: str, max_chars: int = 4000) -> str:
+        """Fetch the diff for a specific commit, truncated to max_chars."""
+        if self._use_gitpython and self._repo is not None:
+            try:
+                commit = self._repo.commit(sha)
+                # Get diff against parent (or empty tree if root)
+                parent = commit.parents[0] if commit.parents else None
+                diffs = parent.diff(commit, create_patch=True) if parent else commit.diff(None, create_patch=True)
+                
+                full_diff = "\n".join(
+                    d.diff.decode("utf-8", errors="replace") 
+                    for d in diffs 
+                    if d.diff
+                )
+                return full_diff[:max_chars]
+            except Exception:
+                return ""
+        
+        # CLI fallback
+        try:
+            # git show --format= --patch <sha>
+            output = self._run_git("show", "--format=", "--patch", sha)
+            return output[:max_chars]
+        except Exception:
+            return ""
 
     def list_tags(self, pattern: Optional[str] = None) -> List[TagInfo]:
         """Return repository tags, newest first."""
@@ -152,7 +180,9 @@ class GitRepository:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _iter_commits_gitpython(self, commit_range: CommitRange) -> Iterator[CommitInfo]:
+    def _iter_commits_gitpython(
+        self, commit_range: CommitRange, include_diffs: bool = False
+    ) -> Iterator[CommitInfo]:
         assert self._repo is not None  # for type checkers
         kwargs = {
             "rev": commit_range.rev_spec(),
@@ -174,6 +204,11 @@ class GitRepository:
             subject, body = self._split_message(raw_commit.message)
             authored_date = datetime.fromtimestamp(raw_commit.authored_date, tz=UTC)
             committed_date = datetime.fromtimestamp(raw_commit.committed_date, tz=UTC)
+            
+            diff = None
+            if include_diffs:
+                diff = self.get_commit_diff(raw_commit.hexsha)
+
             yield CommitInfo(
                 sha=raw_commit.hexsha,
                 subject=subject,
@@ -183,9 +218,12 @@ class GitRepository:
                 authored_date=authored_date,
                 committed_date=committed_date,
                 is_merge=len(raw_commit.parents) > 1,
+                diff=diff,
             )
 
-    def _iter_commits_cli(self, commit_range: CommitRange) -> Iterator[CommitInfo]:
+    def _iter_commits_cli(
+        self, commit_range: CommitRange, include_diffs: bool = False
+    ) -> Iterator[CommitInfo]:
         rev = commit_range.rev_spec()
         args = [
             "log",
@@ -219,6 +257,11 @@ class GitRepository:
             ) = entry.split("\x1f")
             if not commit_range.include_merges and len(parents.split()) > 1:
                 continue
+            
+            diff = None
+            if include_diffs:
+                diff = self.get_commit_diff(sha)
+
             yield CommitInfo(
                 sha=sha,
                 subject=subject.strip(),
@@ -228,6 +271,7 @@ class GitRepository:
                 authored_date=datetime.fromtimestamp(int(author_ts), tz=UTC),
                 committed_date=datetime.fromtimestamp(int(commit_ts), tz=UTC),
                 is_merge=len(parents.split()) > 1,
+                diff=diff,
             )
 
     def _list_tags_gitpython(self) -> List[TagInfo]:
