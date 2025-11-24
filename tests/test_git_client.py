@@ -2,7 +2,7 @@ from pathlib import Path
 
 import git
 
-from gitreleasegen.git_client import CommitRange, GitRepository
+from helixcommit.git_client import CommitRange, GitRepository
 
 
 def create_commit(

@@ -9,21 +9,21 @@ echo ""
 
 # Markdown
 echo "1. Generating Markdown..."
-gitreleasegen generate \
+helixcommit generate \
     --unreleased \
     --format markdown \
     --out notes.md
 
 # HTML
 echo "2. Generating HTML..."
-gitreleasegen generate \
+helixcommit generate \
     --unreleased \
     --format html \
     --out notes.html
 
 # Plain Text
 echo "3. Generating plain text..."
-gitreleasegen generate \
+helixcommit generate \
     --unreleased \
     --format text \
     --out notes.txt

@@ -2,17 +2,17 @@
 """
 Programmatic API usage example.
 
-This example demonstrates how to use GitReleaseGen as a Python library
+This example demonstrates how to use HelixCommit as a Python library
 instead of via the command line.
 """
 
 from datetime import datetime
 from pathlib import Path
 
-from gitreleasegen.changelog import ChangelogBuilder
-from gitreleasegen.formatters.markdown import render_markdown
-from gitreleasegen.git_client import CommitRange, GitRepository
-from gitreleasegen.grouper import DEFAULT_ORDER
+from helixcommit.changelog import ChangelogBuilder
+from helixcommit.formatters.markdown import render_markdown
+from helixcommit.git_client import CommitRange, GitRepository
+from helixcommit.grouper import DEFAULT_ORDER
 
 
 def generate_release_notes(repo_path: Path, since_tag: str, until_tag: str) -> str:

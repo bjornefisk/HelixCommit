@@ -1,11 +1,11 @@
-# GitReleaseGen
+# HelixCommit
 
-[![CI](https://github.com/bjornefisk/GitReleaseGen/actions/workflows/ci.yml/badge.svg)](https://github.com/bjornefisk/GitReleaseGen/actions/workflows/ci.yml)
+[![CI](https://github.com/bjornefisk/HelixCommit/actions/workflows/ci.yml/badge.svg)](https://github.com/bjornefisk/HelixCommit/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-**GitReleaseGen** turns Git history into polished, publish-ready release notes. It understands Conventional Commits, enriches entries with GitHub pull requests, and can summarize changes with OpenAI-compatible LLMs.
+**HelixCommit** turns Git history into polished, publish-ready release notes. It understands Conventional Commits, enriches entries with GitHub pull requests, and can summarize changes with OpenAI-compatible LLMs.
 
 ## Features
 
@@ -19,28 +19,28 @@
 ## Zero-config Quickstart
 
 ```bash
-pip install gitreleasegen
+pip install helixcommit
 
 # Generate release notes with no external services
 # - works offline
 # - skips GitHub API calls
-gitreleasegen generate --unreleased --no-prs --format markdown > RELEASE_NOTES.md
+helixcommit generate --unreleased --no-prs --format markdown > RELEASE_NOTES.md
 
 # Or for a specific tag range
-gitreleasegen generate --since-tag v1.2.0 --until-tag v1.3.0 --format html --out dist/release.html
+helixcommit generate --since-tag v1.2.0 --until-tag v1.3.0 --format html --out dist/release.html
 ```
 
 ### From source (development)
 
 ```bash
-git clone https://github.com/bjornefisk/gitreleasegen.git
-cd gitreleasegen
+git clone https://github.com/bjornefisk/helixcommit.git
+cd helixcommit
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
 # Smoke test
-gitreleasegen --help
+helixcommit --help
 pytest -q
 ```
 

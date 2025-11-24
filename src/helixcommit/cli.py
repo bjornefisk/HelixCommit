@@ -1,4 +1,4 @@
-"""Command-line interface for GitReleaseGenerator."""
+"""Command-line interface for HelixCommit."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from .github_client import GitHubClient, GitHubSettings
 from .models import Changelog, CommitInfo, PullRequestInfo
 from .summarizer import BaseSummarizer, PromptEngineeredSummarizer, SummaryRequest
 
-APP_NAME = "GitReleaseGenerator"
-DEFAULT_SUMMARY_CACHE = Path(".gitreleasegen-cache/summaries.json")
+APP_NAME = "HelixCommit"
+DEFAULT_SUMMARY_CACHE = Path(".helixcommit-cache/summaries.json")
 PR_NUMBER_PATTERN = re.compile(
     r"(?:\(#(?P<num_paren>\d+)\))|(?:pull request #(?P<num_pr>\d+))|(?:pr #(?P<num_alt>\d+))",
     re.IGNORECASE,

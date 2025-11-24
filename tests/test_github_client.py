@@ -5,8 +5,8 @@ import pytest
 import requests
 import responses
 
-import gitreleasegen.github_client as gh_client_module
-from gitreleasegen.github_client import GitHubClient, GitHubSettings
+import helixcommit.github_client as gh_client_module
+from helixcommit.github_client import GitHubClient, GitHubSettings
 
 
 @responses.activate

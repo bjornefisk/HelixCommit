@@ -1,4 +1,4 @@
-"""Utility helpers for GitReleaseGenerator."""
+"""Utility helpers for HelixCommit."""
 
 from __future__ import annotations
 

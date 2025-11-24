@@ -1,4 +1,4 @@
-"""Initialize the gitreleasegen package."""
+"""Initialize the helixcommit package."""
 
 __all__ = [
     "__version__",

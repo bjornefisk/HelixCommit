@@ -1,6 +1,6 @@
-# Contributing to GitReleaseGen
+# Contributing to HelixCommit
 
-Thank you for your interest in contributing to GitReleaseGen! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to HelixCommit! This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 
@@ -18,8 +18,8 @@ We are committed to providing a welcoming and inclusive environment. Please be r
 
 1. **Fork and clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/gitreleasegen.git
-   cd gitreleasegen
+   git clone https://github.com/yourusername/helixcommit.git
+   cd helixcommit
    ```
 
 2. **Create a virtual environment:**
@@ -48,7 +48,7 @@ We are committed to providing a welcoming and inclusive environment. Please be r
 pytest
 
 # Run with coverage
-pytest --cov=gitreleasegen --cov-report=html --cov-report=term
+pytest --cov=helixcommit --cov-report=html --cov-report=term
 
 # Run specific test file
 pytest tests/test_parser.py
@@ -81,7 +81,7 @@ While not strictly enforced, we encourage type hints:
 pip install mypy
 
 # Run type checker
-mypy src/gitreleasegen
+mypy src/helixcommit
 ```
 
 ## Making Changes
@@ -229,8 +229,8 @@ If your change breaks backward compatibility:
 ## Project Structure
 
 ```
-gitreleasegen/
-├── src/gitreleasegen/      # Source code
+helixcommit/
+├── src/helixcommit/      # Source code
 │   ├── cli.py              # Command-line interface
 │   ├── git_client.py       # Git operations
 │   ├── github_client.py    # GitHub API client
@@ -247,8 +247,8 @@ gitreleasegen/
 
 ## Getting Help
 
-- **Questions:** Open a [Discussion](https://github.com/yourusername/gitreleasegen/discussions)
-- **Bugs:** File an [Issue](https://github.com/yourusername/gitreleasegen/issues)
+- **Questions:** Open a [Discussion](https://github.com/yourusername/helixcommit/discussions)
+- **Bugs:** File an [Issue](https://github.com/yourusername/helixcommit/issues)
 - **Security:** See [SECURITY.md](SECURITY.md)
 
 ## Release Process

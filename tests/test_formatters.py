@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from gitreleasegen.formatters.html import render_html
-from gitreleasegen.formatters.markdown import render_markdown
-from gitreleasegen.formatters.text import render_text
-from gitreleasegen.models import ChangeItem, Changelog, ChangelogSection
+from helixcommit.formatters.html import render_html
+from helixcommit.formatters.markdown import render_markdown
+from helixcommit.formatters.text import render_text
+from helixcommit.models import ChangeItem, Changelog, ChangelogSection
 
 
 def build_sample_changelog() -> Changelog:

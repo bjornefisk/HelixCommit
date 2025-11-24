@@ -19,7 +19,7 @@ fi
 echo "🔗 Generating release notes with GitHub integration..."
 echo ""
 
-gitreleasegen generate \
+helixcommit generate \
     --unreleased \
     --format markdown \
     --out GITHUB_NOTES.md

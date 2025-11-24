@@ -1,4 +1,4 @@
-from gitreleasegen.parser import classify_change_type, parse_commit_message
+from helixcommit.parser import classify_change_type, parse_commit_message
 
 
 def test_parse_conventional_commit_with_breaking_footer():

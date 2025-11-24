@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Basic usage example for GitReleaseGen.
+Basic usage example for HelixCommit.
 
 This script demonstrates the most common use case: generating release notes
 for unreleased changes in the current repository.
@@ -28,7 +28,7 @@ def main():
     # Generate release notes
     result = subprocess.run(
         [
-            "gitreleasegen",
+            "helixcommit",
             "generate",
             "--unreleased",
             "--format",

@@ -31,7 +31,7 @@ def main():
 
     result = subprocess.run(
         [
-            "gitreleasegen",
+            "helixcommit",
             "generate",
             "--unreleased",
             "--use-llm",
@@ -51,7 +51,7 @@ def main():
     if result.returncode == 0:
         print("✅ AI-powered release notes generated!")
         print("📄 Saved to: AI_RELEASE_NOTES.md")
-        print("\nNote: Summaries are cached in .gitreleasegen-cache/")
+        print("\nNote: Summaries are cached in .helixcommit-cache/")
         print("      Delete this directory to regenerate summaries.")
     else:
         print("❌ Failed to generate release notes", file=sys.stderr)

@@ -21,8 +21,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install GitReleaseGen
-        run: pip install gitreleasegen
+      - name: Install HelixCommit
+        run: pip install helixcommit
 
       - name: Generate release notes
         env:
@@ -31,14 +31,14 @@ jobs:
         run: |
           # Generate AI-powered notes if API key is available
           if [ -n "$OPENROUTER_API_KEY" ]; then
-            gitreleasegen generate \
+            helixcommit generate \
               --unreleased \
               --use-llm \
               --llm-provider openrouter \
               --format markdown \
               --out RELEASE_NOTES.md
           else
-            gitreleasegen generate \
+            helixcommit generate \
               --unreleased \
               --format markdown \
               --out RELEASE_NOTES.md

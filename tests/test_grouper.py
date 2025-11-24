@@ -1,5 +1,5 @@
-from gitreleasegen.grouper import DEFAULT_ORDER, group_items
-from gitreleasegen.models import ChangeItem
+from helixcommit.grouper import DEFAULT_ORDER, group_items
+from helixcommit.models import ChangeItem
 
 
 def make_item(title: str, change_type: str, pr_number: str | None = None) -> ChangeItem:

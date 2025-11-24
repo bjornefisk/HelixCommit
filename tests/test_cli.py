@@ -3,7 +3,7 @@ from pathlib import Path
 import git
 from typer.testing import CliRunner
 
-from gitreleasegen.cli import app
+from helixcommit.cli import app
 
 runner = CliRunner()
 

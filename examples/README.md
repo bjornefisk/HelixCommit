@@ -1,6 +1,6 @@
-# GitReleaseGen Examples
+# HelixCommit Examples
 
-This directory contains practical examples demonstrating various use cases of GitReleaseGen.
+This directory contains practical examples demonstrating various use cases of HelixCommit.
 
 ## Examples Overview
 
@@ -34,7 +34,7 @@ python examples/ai_summarization.py
 
 ### 3. Programmatic Usage (`programmatic_usage.py`)
 
-Use GitReleaseGen as a Python library in your own scripts.
+Use HelixCommit as a Python library in your own scripts.
 
 ```bash
 python examples/programmatic_usage.py
@@ -158,7 +158,7 @@ git log --format="%H" -- src/api/ | head -n 1
 VERSION="$1"
 
 # Generate release notes
-gitreleasegen generate \
+helixcommit generate \
   --unreleased \
   --use-llm \
   --format markdown \
