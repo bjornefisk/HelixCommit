@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import typer
 
 from .changelog import ChangelogBuilder
+from .commit_generator import CommitGenerator
 from .formatters import html as html_formatter
 from .formatters import markdown as markdown_formatter
 from .formatters import text as text_formatter
@@ -181,16 +182,24 @@ def generate(
 
     # Build changelog
     builder = ChangelogBuilder(
-        repo=git_repo,
-        github=github_client,
         summarizer=summarizer,
         include_scopes=include_scopes,
-        no_prs=no_prs,
-        no_merge_commits=no_merge_commits,
-        max_items=max_items,
-        include_diffs=include_diffs,
     )
-    changelog = builder.build(range_context)
+
+    version_name = context.until_tag.name if context.until_tag else "Unreleased"
+    release_date = (
+        context.until_tag.date
+        if context.until_tag and context.until_tag.date
+        else datetime.now(timezone.utc)
+    )
+
+    changelog = builder.build(
+        version=version_name,
+        release_date=release_date,
+        commits=commits,
+        commit_prs=commit_prs,
+        pr_index=pr_index,
+    )
 
     compare_url = _compute_compare_url(owner_repo, context)
     if compare_url:
@@ -273,6 +282,106 @@ def auto_commit(
             git_repo.commit(new_message)
             typer.echo("Committed.")
             break
+
+
+@app.command()
+def generate_commit(
+    repo: Path = typer.Option(
+        Path.cwd(),
+        "--repo",
+        exists=True,
+        file_okay=False,
+        resolve_path=True,
+        help="Repository path.",
+    ),
+    llm_provider: str = typer.Option("openrouter", help="AI provider (openai/openrouter)."),
+    openai_model: str = typer.Option("gpt-4o-mini", help="OpenAI model."),
+    openai_api_key: Optional[str] = typer.Option(
+        None, envvar="OPENAI_API_KEY", help="OpenAI API key."
+    ),
+    openrouter_model: str = typer.Option(
+        "meta-llama/llama-3.3-8b-instruct:free", help="OpenRouter model."
+    ),
+    openrouter_api_key: Optional[str] = typer.Option(
+        None, envvar="OPENROUTER_API_KEY", help="OpenRouter API key."
+    ),
+    no_confirm: bool = typer.Option(False, help="Skip confirmation (not recommended)."),
+) -> None:
+    """Generate a commit message from staged changes."""
+    # 1. Setup Git
+    git_repo = GitRepository(repo)
+
+    # 2. Check for staged changes
+    diff = git_repo.get_diff(staged=True)
+    if not diff.strip():
+        typer.echo("No staged changes found. Stage some changes with 'git add' first.")
+        raise typer.Exit(1)
+
+    # 3. Setup AI
+    api_key = openrouter_api_key if llm_provider == "openrouter" else openai_api_key
+    model = openrouter_model if llm_provider == "openrouter" else openai_model
+    base_url = "https://openrouter.ai/api/v1" if llm_provider == "openrouter" else None
+
+    if not api_key:
+        typer.echo(
+            f"Missing API key for {llm_provider}. Set {llm_provider.upper()}_API_KEY."
+        )
+        raise typer.Exit(1)
+
+    try:
+        generator = CommitGenerator(api_key=api_key, model=model, base_url=base_url)
+    except ImportError as e:
+        typer.echo(str(e))
+        raise typer.Exit(1)
+
+    # 4. Generate
+    typer.echo("Analyzing changes...")
+    response = generator.generate(diff)
+
+    # 5. Interactive Loop
+    while True:
+        typer.echo("\nAI Response:")
+        typer.echo("--------------------------------------------------")
+        typer.echo(response)
+        typer.echo("--------------------------------------------------")
+
+        if no_confirm:
+            # If no confirm, we assume the response IS the message.
+            # But we still need to format it.
+            pass
+
+        choice = typer.prompt(
+            "\nAction? [c]ommit / [r]eply / [q]uit", default="c"
+        ).lower()
+
+        if choice == "q":
+            typer.echo("Aborted.")
+            raise typer.Exit(0)
+
+        elif choice == "c":
+            # Extract potential message from response
+            match = re.search(r"\d{2}-\d{2}-\d{4}: .+", response)
+            if match:
+                commit_msg = match.group(0)
+            else:
+                # Prepend date if missing
+                today_str = datetime.now().strftime("%m-%d-%Y")
+                if response.strip().startswith(today_str):
+                    commit_msg = response.strip()
+                else:
+                    commit_msg = f"{today_str}: {response.strip()}"
+
+            confirm = typer.confirm(f"Commit with message:\n'{commit_msg}'?")
+            if confirm:
+                git_repo.commit(commit_msg)
+                typer.echo("Committed!")
+                break
+            else:
+                typer.echo("Commit cancelled. You can reply to refine.")
+
+        elif choice == "r":
+            user_feedback = typer.prompt("Your reply")
+            response = generator.chat(user_feedback)
 
 
 def _resolve_commit_range(

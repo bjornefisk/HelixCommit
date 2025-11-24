@@ -206,11 +206,12 @@ class GitRepository:
             self._run_git("add", ".")
 
     def commit(self, message: str) -> None:
-        """Commit staged changes."""
+        """Create a commit with the given message."""
         if self._use_gitpython and self._repo is not None:
             self._repo.index.commit(message)
-        else:
-            self._run_git("commit", "-m", message)
+            return
+
+        self._run_git("commit", "-m", message)
 
     # ------------------------------------------------------------------
     # Internal helpers

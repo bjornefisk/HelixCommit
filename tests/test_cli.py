@@ -26,6 +26,7 @@ def test_cli_generate_text_output(tmp_path):
     result = runner.invoke(
         app,
         [
+            "generate",
             "--repo",
             str(tmp_path),
             "--since",
