@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [
     { name = "HelixCommit" }
 ]
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.9"
 dependencies = [
     "GitPython>=3.1.43",
