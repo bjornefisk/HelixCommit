@@ -65,3 +65,69 @@ def test_git_repository_include_diffs(tmp_path):
     assert len(commits) == 1
     assert commits[0].diff is not None
     assert "Updated" in commits[0].diff
+
+
+def test_get_gitlab_slug_https(tmp_path):
+    """Test GitLab slug extraction from HTTPS URL."""
+    repo = git.Repo.init(tmp_path)
+    repo.create_remote("origin", "https://gitlab.com/mygroup/myproject.git")
+
+    git_repo = GitRepository(tmp_path)
+    slug = git_repo.get_gitlab_slug()
+
+    assert slug == "mygroup/myproject"
+
+
+def test_get_gitlab_slug_ssh(tmp_path):
+    """Test GitLab slug extraction from SSH URL."""
+    repo = git.Repo.init(tmp_path)
+    repo.create_remote("origin", "git@gitlab.com:mygroup/myproject.git")
+
+    git_repo = GitRepository(tmp_path)
+    slug = git_repo.get_gitlab_slug()
+
+    assert slug == "mygroup/myproject"
+
+
+def test_get_gitlab_slug_subgroups(tmp_path):
+    """Test GitLab slug extraction with subgroups."""
+    repo = git.Repo.init(tmp_path)
+    repo.create_remote("origin", "git@gitlab.com:group/subgroup/project.git")
+
+    git_repo = GitRepository(tmp_path)
+    slug = git_repo.get_gitlab_slug()
+
+    assert slug == "group/subgroup/project"
+
+
+def test_get_gitlab_slug_self_hosted(tmp_path):
+    """Test GitLab slug extraction from self-hosted instance."""
+    repo = git.Repo.init(tmp_path)
+    repo.create_remote("origin", "git@gitlab.example.com:team/project.git")
+
+    git_repo = GitRepository(tmp_path)
+    slug = git_repo.get_gitlab_slug()
+
+    assert slug == "team/project"
+
+
+def test_get_gitlab_slug_returns_none_for_github(tmp_path):
+    """Test that GitHub URLs don't match GitLab pattern."""
+    repo = git.Repo.init(tmp_path)
+    repo.create_remote("origin", "git@github.com:owner/repo.git")
+
+    git_repo = GitRepository(tmp_path)
+    slug = git_repo.get_gitlab_slug()
+
+    assert slug is None
+
+
+def test_get_github_slug_returns_none_for_gitlab(tmp_path):
+    """Test that GitLab URLs don't match GitHub pattern."""
+    repo = git.Repo.init(tmp_path)
+    repo.create_remote("origin", "git@gitlab.com:mygroup/myproject.git")
+
+    git_repo = GitRepository(tmp_path)
+    slug = git_repo.get_github_slug()
+
+    assert slug is None

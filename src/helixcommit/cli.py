@@ -359,7 +359,7 @@ def generate_commit(
         generator = CommitGenerator(api_key=api_key, model=model, base_url=base_url)
     except ImportError as e:
         typer.echo(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     # 4. Generate
     typer.echo("Analyzing changes...")

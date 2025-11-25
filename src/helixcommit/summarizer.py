@@ -23,7 +23,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Sequence
 
 try:  # pragma: no cover - optional dependency guard
     from openai import OpenAI

@@ -193,13 +193,17 @@ class GitRepository:
         # HTTPS: https://gitlab.com/group/project.git
         # Self-hosted: git@gitlab.example.com:group/project.git
         match = re.search(
-            r"(?:gitlab[^/]*[:/])(?P<path>.+?)(?:\\.git)?$",
+            r"gitlab[^/:]*[:/](?P<path>.+?)(?:\.git)?$",
             url,
             re.IGNORECASE,
         )
         if not match:
             return None
-        return match.group("path")
+        path = match.group("path")
+        # Remove trailing .git if present (handles edge cases)
+        if path.endswith(".git"):
+            path = path[:-4]
+        return path
 
     def is_dirty(self) -> bool:
         """Check if the repository has uncommitted changes."""

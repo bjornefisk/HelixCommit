@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 try:  # pragma: no cover - optional dependency guard
     from openai import OpenAI

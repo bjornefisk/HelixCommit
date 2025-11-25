@@ -1,14 +1,15 @@
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from helixcommit.summarizer import (
     OpenAISummarizer,
     PromptEngineeredSummarizer,
     SummaryCache,
     SummaryRequest,
 )
+
 
 @pytest.fixture
 def mock_openai():

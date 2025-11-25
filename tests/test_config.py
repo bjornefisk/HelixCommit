@@ -1,5 +1,7 @@
 from pathlib import Path
+
 from helixcommit.config import GeneratorConfig
+
 
 def test_generator_config_defaults():
     config = GeneratorConfig()
