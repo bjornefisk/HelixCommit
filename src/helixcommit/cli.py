@@ -14,6 +14,7 @@ import typer
 
 from .changelog import ChangelogBuilder
 from .commit_generator import CommitGenerator
+from .config import load_config
 from .formatters import html as html_formatter
 from .formatters import markdown as markdown_formatter
 from .formatters import text as text_formatter
@@ -85,19 +86,19 @@ def generate(
     since: Optional[str] = typer.Option(None, help="Commits after this ref."),
     until: Optional[str] = typer.Option(None, help="Commits up to this ref."),
     unreleased: bool = typer.Option(False, help="HEAD vs latest tag."),
-    output_format: OutputFormat = typer.Option(
-        OutputFormat.markdown, "--format", case_sensitive=False
+    output_format: Optional[OutputFormat] = typer.Option(
+        None, "--format", case_sensitive=False, help="Output format (markdown/html/text)."
     ),
     out: Optional[Path] = typer.Option(None, help="Output file path."),
-    use_llm: bool = typer.Option(False, help="Use AI summaries."),
-    llm_provider: str = typer.Option("openrouter", help="AI provider (openai/openrouter)."),
-    openai_model: str = typer.Option("gpt-4o-mini", help="OpenAI model."),
+    use_llm: Optional[bool] = typer.Option(None, help="Use AI summaries."),
+    llm_provider: Optional[str] = typer.Option(
+        None, help="AI provider (openai/openrouter)."
+    ),
+    openai_model: Optional[str] = typer.Option(None, help="OpenAI model."),
     openai_api_key: Optional[str] = typer.Option(
         None, envvar="OPENAI_API_KEY", help="OpenAI API key."
     ),
-    openrouter_model: str = typer.Option(
-        "x-ai/grok-4.1-fast:free", help="OpenRouter model."
-    ),
+    openrouter_model: Optional[str] = typer.Option(None, help="OpenRouter model."),
     openrouter_api_key: Optional[str] = typer.Option(
         None, envvar="OPENROUTER_API_KEY", help="OpenRouter API key."
     ),
@@ -110,17 +111,17 @@ def generate(
     bitbucket_token: Optional[str] = typer.Option(
         None, envvar="BITBUCKET_TOKEN", help="Bitbucket API token."
     ),
-    include_scopes: bool = typer.Option(
-        True, "--include-scopes/--no-include-scopes", help="Show commit scopes."
+    include_scopes: Optional[bool] = typer.Option(
+        None, "--include-scopes/--no-include-scopes", help="Show commit scopes."
     ),
-    include_diffs: bool = typer.Option(
-        False, "--include-diffs", help="Include commit diffs for AI summarization."
+    include_diffs: Optional[bool] = typer.Option(
+        None, "--include-diffs/--no-include-diffs", help="Include commit diffs for AI."
     ),
-    no_prs: bool = typer.Option(False, help="Skip PR lookups."),
-    no_merge_commits: bool = typer.Option(False, help="Exclude merge commits."),
+    no_prs: Optional[bool] = typer.Option(None, help="Skip PR lookups."),
+    no_merge_commits: Optional[bool] = typer.Option(None, help="Exclude merge commits."),
     max_items: Optional[int] = typer.Option(None, help="Limit commits."),
     summary_cache: Optional[Path] = typer.Option(None, help="Cache file path."),
-    fail_on_empty: bool = typer.Option(False, help="Exit on no commits."),
+    fail_on_empty: Optional[bool] = typer.Option(None, help="Exit on no commits."),
     domain_scope: Optional[str] = typer.Option(
         None,
         help="Domain scope for the system prompt (e.g., 'software release notes', 'conservation').",
@@ -130,14 +131,46 @@ def generate(
         "--expert-role",
         help="Add a role for multi-expert prompting (repeatable). Defaults: Product Manager, Tech Lead, QA Engineer.",
     ),
-    rag_backend: RagBackend = typer.Option(
-        RagBackend.simple,
+    rag_backend: Optional[RagBackend] = typer.Option(
+        None,
         help="RAG backend: 'simple' (keyword) or 'chroma' (best-effort, optional dependency).",
     ),
 ) -> None:
     """Generate release notes from commit history."""
 
     repo = repo.resolve()
+
+    # Load config file from repo
+    file_config = load_config(repo)
+
+    # Apply config file values as defaults (CLI options override)
+    if output_format is None:
+        output_format = OutputFormat(file_config.generate.format)
+    if use_llm is None:
+        use_llm = file_config.ai.enabled
+    if llm_provider is None:
+        llm_provider = file_config.ai.provider
+    if openai_model is None:
+        openai_model = file_config.ai.openai_model
+    if openrouter_model is None:
+        openrouter_model = file_config.ai.openrouter_model
+    if include_scopes is None:
+        include_scopes = file_config.generate.include_scopes
+    if include_diffs is None:
+        include_diffs = file_config.ai.include_diffs
+    if no_prs is None:
+        no_prs = file_config.generate.no_prs
+    if no_merge_commits is None:
+        no_merge_commits = file_config.generate.no_merge_commits
+    if fail_on_empty is None:
+        fail_on_empty = file_config.generate.fail_on_empty
+    if domain_scope is None:
+        domain_scope = file_config.ai.domain_scope
+    if expert_role is None and file_config.ai.expert_roles:
+        expert_role = file_config.ai.expert_roles
+    if rag_backend is None:
+        rag_backend = RagBackend(file_config.ai.rag_backend)
+
     git_repo = GitRepository(repo)
 
     commit_range, context = _resolve_commit_range(
@@ -343,20 +376,33 @@ def generate_commit(
         resolve_path=True,
         help="Repository path.",
     ),
-    llm_provider: str = typer.Option("openrouter", help="AI provider (openai/openrouter)."),
-    openai_model: str = typer.Option("gpt-4o-mini", help="OpenAI model."),
+    llm_provider: Optional[str] = typer.Option(
+        None, help="AI provider (openai/openrouter)."
+    ),
+    openai_model: Optional[str] = typer.Option(None, help="OpenAI model."),
     openai_api_key: Optional[str] = typer.Option(
         None, envvar="OPENAI_API_KEY", help="OpenAI API key."
     ),
-    openrouter_model: str = typer.Option(
-        "x-ai/grok-4.1-fast:free", help="OpenRouter model."
-    ),
+    openrouter_model: Optional[str] = typer.Option(None, help="OpenRouter model."),
     openrouter_api_key: Optional[str] = typer.Option(
         None, envvar="OPENROUTER_API_KEY", help="OpenRouter API key."
     ),
     no_confirm: bool = typer.Option(False, help="Skip confirmation (not recommended)."),
 ) -> None:
     """Generate a commit message from staged changes."""
+    repo = repo.resolve()
+
+    # Load config file from repo
+    file_config = load_config(repo)
+
+    # Apply config file values as defaults (CLI options override)
+    if llm_provider is None:
+        llm_provider = file_config.ai.provider
+    if openai_model is None:
+        openai_model = file_config.ai.openai_model
+    if openrouter_model is None:
+        openrouter_model = file_config.ai.openrouter_model
+
     # 1. Setup Git
     git_repo = GitRepository(repo)
 
