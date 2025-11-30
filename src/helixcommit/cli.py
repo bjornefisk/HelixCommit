@@ -16,6 +16,7 @@ from .changelog import ChangelogBuilder
 from .commit_generator import CommitGenerator
 from .config import load_config
 from .formatters import html as html_formatter
+from .formatters import json as json_formatter
 from .formatters import markdown as markdown_formatter
 from .formatters import text as text_formatter
 from .bitbucket_client import BitbucketClient, BitbucketSettings
@@ -56,6 +57,7 @@ class OutputFormat(str, Enum):
     markdown = "markdown"
     html = "html"
     text = "text"
+    json = "json"
 
 
 class RagBackend(str, Enum):
@@ -87,7 +89,7 @@ def generate(
     until: Optional[str] = typer.Option(None, help="Commits up to this ref."),
     unreleased: bool = typer.Option(False, help="HEAD vs latest tag."),
     output_format: Optional[OutputFormat] = typer.Option(
-        None, "--format", case_sensitive=False, help="Output format (markdown/html/text)."
+        None, "--format", case_sensitive=False, help="Output format (markdown/html/text/json)."
     ),
     out: Optional[Path] = typer.Option(None, help="Output file path."),
     use_llm: Optional[bool] = typer.Option(None, help="Use AI summaries."),
@@ -718,6 +720,8 @@ def _render_output(changelog: Changelog, output_format: OutputFormat) -> str:
         return html_formatter.render_html(changelog)
     if output_format is OutputFormat.text:
         return text_formatter.render_text(changelog)
+    if output_format is OutputFormat.json:
+        return json_formatter.render_json(changelog)
     raise typer.BadParameter(f"Unsupported format: {output_format}")
 
 
