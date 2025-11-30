@@ -8,6 +8,7 @@ from helixcommit.config import (
     FileConfig,
     GenerateConfig,
     GeneratorConfig,
+    TemplateConfig,
     load_config,
 )
 
@@ -317,3 +318,106 @@ def test_load_config_defaults_to_cwd():
     config = load_config()
     # Should not raise, returns defaults if no config file in cwd
     assert isinstance(config, FileConfig)
+
+
+# --- TemplateConfig tests ---
+
+
+def test_template_config_defaults():
+    """TemplateConfig has None for all formats by default."""
+    config = TemplateConfig()
+    assert config.markdown is None
+    assert config.html is None
+    assert config.text is None
+    assert config.json is None
+    assert config.yaml is None
+
+
+def test_template_config_custom():
+    """TemplateConfig accepts custom paths."""
+    config = TemplateConfig(
+        markdown=Path("/custom/markdown.j2"),
+        html=Path("/custom/html.j2"),
+    )
+    assert config.markdown == Path("/custom/markdown.j2")
+    assert config.html == Path("/custom/html.j2")
+    assert config.text is None
+
+
+def test_template_config_get_template_for_format():
+    """get_template_for_format returns the correct template path."""
+    config = TemplateConfig(
+        markdown=Path("/custom/md.j2"),
+        html=Path("/custom/html.j2"),
+    )
+    assert config.get_template_for_format("markdown") == Path("/custom/md.j2")
+    assert config.get_template_for_format("html") == Path("/custom/html.j2")
+    assert config.get_template_for_format("text") is None
+    assert config.get_template_for_format("unknown") is None
+
+
+def test_file_config_includes_templates():
+    """FileConfig includes TemplateConfig."""
+    config = FileConfig()
+    assert isinstance(config.templates, TemplateConfig)
+
+
+def test_config_loader_loads_templates_toml(tmp_path):
+    """ConfigLoader correctly parses template paths from TOML."""
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    md_template = templates_dir / "changelog.md.j2"
+    md_template.write_text("# Test")
+
+    config_file = tmp_path / ".helixcommit.toml"
+    config_file.write_text("""
+[templates]
+markdown = "templates/changelog.md.j2"
+""")
+
+    loader = ConfigLoader(tmp_path)
+    config = loader.load()
+
+    # Template path should be resolved relative to config file
+    assert config.templates.markdown == md_template.resolve()
+    assert config.templates.html is None
+
+
+def test_config_loader_loads_templates_yaml(tmp_path):
+    """ConfigLoader correctly parses template paths from YAML."""
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    html_template = templates_dir / "changelog.html.j2"
+    html_template.write_text("<h1>Test</h1>")
+
+    config_file = tmp_path / ".helixcommit.yaml"
+    config_file.write_text("""
+templates:
+  html: templates/changelog.html.j2
+  text: templates/changelog.txt.j2
+""")
+
+    loader = ConfigLoader(tmp_path)
+    config = loader.load()
+
+    assert config.templates.html == (templates_dir / "changelog.html.j2").resolve()
+    assert config.templates.text == (templates_dir / "changelog.txt.j2").resolve()
+    assert config.templates.markdown is None
+
+
+def test_config_loader_templates_absolute_path(tmp_path):
+    """ConfigLoader handles absolute template paths."""
+    abs_path = tmp_path / "abs" / "template.md.j2"
+    abs_path.parent.mkdir()
+    abs_path.write_text("# Absolute")
+
+    config_file = tmp_path / ".helixcommit.toml"
+    config_file.write_text(f"""
+[templates]
+markdown = "{abs_path}"
+""")
+
+    loader = ConfigLoader(tmp_path)
+    config = loader.load()
+
+    assert config.templates.markdown == abs_path.resolve()

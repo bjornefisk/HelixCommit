@@ -20,6 +20,7 @@ from .formatters import json as json_formatter
 from .formatters import markdown as markdown_formatter
 from .formatters import text as text_formatter
 from .formatters import yaml as yaml_formatter
+from .template import TemplateEngine, detect_format_from_template
 from .bitbucket_client import BitbucketClient, BitbucketSettings
 from .git_client import CommitRange, GitRepository, TagInfo
 from .github_client import GitHubClient, GitHubSettings
@@ -138,6 +139,20 @@ def generate(
     rag_backend: Optional[RagBackend] = typer.Option(
         None,
         help="RAG backend: 'simple' (keyword) or 'chroma' (best-effort, optional dependency).",
+    ),
+    template: Optional[Path] = typer.Option(
+        None,
+        "--template",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+        help="Custom Jinja2 template file for output formatting.",
+    ),
+    use_builtin_templates: bool = typer.Option(
+        False,
+        "--use-builtin-templates",
+        help="Use bundled Jinja2 templates instead of hardcoded formatters.",
     ),
 ) -> None:
     """Generate release notes from commit history."""
@@ -291,7 +306,17 @@ def generate(
     if compare_url:
         changelog.metadata["compare_url"] = compare_url
 
-    output = _render_output(changelog, output_format)
+    # Determine template path: CLI flag > config file > None
+    template_path = template
+    if template_path is None:
+        template_path = file_config.templates.get_template_for_format(output_format.value)
+
+    output = _render_output(
+        changelog,
+        output_format,
+        template_path=template_path,
+        use_templates=use_builtin_templates or template_path is not None,
+    )
     _write_output(output, out)
     typer.echo(
         f"Generated changelog with {sum(len(section.items) for section in changelog.sections)} entries."
@@ -715,7 +740,29 @@ def _compute_compare_url(
     return None
 
 
-def _render_output(changelog: Changelog, output_format: OutputFormat) -> str:
+def _render_output(
+    changelog: Changelog,
+    output_format: OutputFormat,
+    template_path: Optional[Path] = None,
+    use_templates: bool = False,
+) -> str:
+    """Render changelog output using formatters or templates.
+
+    Args:
+        changelog: The changelog to render.
+        output_format: The output format (markdown, html, text, json, yaml).
+        template_path: Optional custom template file path.
+        use_templates: If True, use Jinja2 templates instead of hardcoded formatters.
+
+    Returns:
+        The rendered changelog as a string.
+    """
+    # Use templates if explicitly requested or if a custom template is provided
+    if use_templates or template_path:
+        engine = TemplateEngine()
+        return engine.render(changelog, output_format.value, template_path)
+
+    # Fall back to hardcoded formatters
     if output_format is OutputFormat.markdown:
         return markdown_formatter.render_markdown(changelog)
     if output_format is OutputFormat.html:

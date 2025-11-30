@@ -1,0 +1,38 @@
+{# HTML changelog template #}
+<section class="changelog">
+  <h2>{% if changelog.version %}Release {{ changelog.version | escape_html }}{% else %}Release{% endif %}</h2>
+{% if changelog.date_formatted %}
+  <p class="changelog-date">Released on {{ changelog.date_formatted | escape_html }}</p>
+{% endif %}
+{% if changelog.metadata.compare_url %}
+  <p class="changelog-compare"><a href="{{ changelog.metadata.compare_url | escape_html }}">Compare changes</a></p>
+{% endif %}
+{% for section in changelog.sections %}
+{% if section.changes %}
+  <section class="changelog-section changelog-section--{{ section.slug | escape_html }}">
+    <h3>{{ section.title | escape_html }}</h3>
+    <ul class="changelog-items">
+{% for item in section.changes %}
+      <li class="changelog-item">
+        <p class="changelog-item-title">{% if item.scope %}<strong>{{ item.scope | escape_html }}</strong> - {% endif %}{{ item.title | escape_html }}{% if item.references.pr and item.metadata.pr_number %} <span class="changelog-item-links"><a href="{{ item.references.pr | escape_html }}">#{{ item.metadata.pr_number | escape_html }}</a>{% if item.references.commit %} <a href="{{ item.references.commit_url | default(item.references.commit, true) | escape_html }}">{{ item.references.commit | short_sha | escape_html }}</a>{% endif %}</span>{% elif item.references.commit %} <span class="changelog-item-links">{{ item.references.commit | short_sha | escape_html }}</span>{% endif %}</p>
+{% if item.summary and item.summary != item.title %}
+        <p class="changelog-item-summary"><em>{{ item.summary | escape_html }}</em></p>
+{% endif %}
+{% for note in item.notes %}
+        <p class="changelog-item-note"><strong>BREAKING:</strong> {{ note | escape_html }}</p>
+{% endfor %}
+{% if item.details %}
+        <div class="changelog-item-details">
+{% for line in item.details.splitlines() %}
+          <p>{{ line | escape_html }}</p>
+{% endfor %}
+        </div>
+{% endif %}
+      </li>
+{% endfor %}
+    </ul>
+  </section>
+{% endif %}
+{% endfor %}
+</section>
+

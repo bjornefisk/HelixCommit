@@ -1,0 +1,46 @@
+{# JSON changelog template #}
+{
+  "version": {% if changelog.version %}"{{ changelog.version }}"{% else %}null{% endif %},
+  "date": {% if changelog.date %}"{{ changelog.date.isoformat() }}"{% else %}null{% endif %},
+  "sections": [
+{% for section in changelog.sections %}
+    {
+      "title": "{{ section.title }}",
+      "items": [
+{% for item in section.changes %}
+        {
+          "title": "{{ item.title | replace('"', '\\"') }}",
+          "type": "{{ item.type }}",
+          "scope": {% if item.scope %}"{{ item.scope }}"{% else %}null{% endif %},
+          "breaking": {{ item.breaking | lower }},
+          "summary": {% if item.summary %}"{{ item.summary | replace('"', '\\"') }}"{% else %}null{% endif %},
+          "details": {% if item.details %}"{{ item.details | replace('\\', '\\\\') | replace('"', '\\"') | replace('\n', '\\n') }}"{% else %}null{% endif %},
+          "notes": [{% for note in item.notes %}"{{ note | replace('"', '\\"') }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+          "references": {
+{% for key, value in item.references.items() %}
+            "{{ key }}": "{{ value }}"{% if not loop.last %},{% endif %}
+
+{% endfor %}
+          },
+          "metadata": {
+{% for key, value in item.metadata.items() %}
+            "{{ key }}": {% if value is string %}"{{ value }}"{% elif value is iterable and value is not string %}[{% for v in value %}"{{ v }}"{% if not loop.last %}, {% endif %}{% endfor %}]{% else %}{{ value | lower if value is sameas true or value is sameas false else value }}{% endif %}{% if not loop.last %},{% endif %}
+
+{% endfor %}
+          }
+        }{% if not loop.last %},{% endif %}
+
+{% endfor %}
+      ]
+    }{% if not loop.last %},{% endif %}
+
+{% endfor %}
+  ],
+  "metadata": {
+{% for key, value in changelog.metadata.items() %}
+    "{{ key }}": "{{ value }}"{% if not loop.last %},{% endif %}
+
+{% endfor %}
+  }
+}
+

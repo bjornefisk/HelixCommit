@@ -65,11 +65,34 @@ class AIConfig:
 
 
 @dataclass
+class TemplateConfig:
+    """Configuration options for custom Jinja2 templates."""
+
+    markdown: Optional[Path] = None
+    html: Optional[Path] = None
+    text: Optional[Path] = None
+    json: Optional[Path] = None
+    yaml: Optional[Path] = None
+
+    def get_template_for_format(self, format_name: str) -> Optional[Path]:
+        """Get the template path for a given format.
+
+        Args:
+            format_name: The format name (markdown, html, text, json, yaml).
+
+        Returns:
+            The template path if configured, otherwise None.
+        """
+        return getattr(self, format_name, None)
+
+
+@dataclass
 class FileConfig:
     """Parsed configuration from a config file."""
 
     generate: GenerateConfig = field(default_factory=GenerateConfig)
     ai: AIConfig = field(default_factory=AIConfig)
+    templates: TemplateConfig = field(default_factory=TemplateConfig)
     _source_path: Optional[Path] = None
 
     @property
@@ -147,6 +170,7 @@ class ConfigLoader:
         """Parse raw config data into a FileConfig object."""
         generate_data = data.get("generate", {})
         ai_data = data.get("ai", {})
+        templates_data = data.get("templates", {})
 
         generate_config = GenerateConfig(
             format=generate_data.get("format", "markdown"),
@@ -167,10 +191,36 @@ class ConfigLoader:
             rag_backend=ai_data.get("rag_backend", "simple"),
         )
 
+        template_config = self._parse_templates(templates_data, source_path)
+
         return FileConfig(
             generate=generate_config,
             ai=ai_config,
+            templates=template_config,
             _source_path=source_path,
+        )
+
+    def _parse_templates(self, data: Dict[str, Any], source_path: Path) -> TemplateConfig:
+        """Parse template configuration data.
+
+        Template paths are resolved relative to the config file's directory.
+        """
+        config_dir = source_path.parent
+
+        def resolve_path(value: Optional[str]) -> Optional[Path]:
+            if not value:
+                return None
+            path = Path(value)
+            if not path.is_absolute():
+                path = config_dir / path
+            return path.resolve()
+
+        return TemplateConfig(
+            markdown=resolve_path(data.get("markdown")),
+            html=resolve_path(data.get("html")),
+            text=resolve_path(data.get("text")),
+            json=resolve_path(data.get("json")),
+            yaml=resolve_path(data.get("yaml")),
         )
 
 
@@ -192,6 +242,7 @@ __all__ = [
     "GeneratorConfig",
     "GenerateConfig",
     "AIConfig",
+    "TemplateConfig",
     "FileConfig",
     "ConfigLoader",
     "load_config",

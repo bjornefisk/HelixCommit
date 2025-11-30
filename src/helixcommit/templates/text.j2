@@ -1,0 +1,29 @@
+{# Plain text changelog template #}
+{% if changelog.version %}Release {{ changelog.version }}{% else %}Release{% endif %}
+
+{% if changelog.date_formatted %}Released on {{ changelog.date_formatted }}{% endif %}
+
+{% if changelog.metadata.compare_url %}Compare: {{ changelog.metadata.compare_url }}{% endif %}
+
+{% for section in changelog.sections %}
+{% if section.changes %}
+{{ section.title | upper }}
+{% for item in section.changes %}
+- {% if item.scope %}[{{ item.scope }}] {% endif %}{{ item.title }}{% if item.metadata.pr_number %} (PR #{{ item.metadata.pr_number }}{% if item.references.pr %} {{ item.references.pr }}{% endif %}{% if item.references.commit %}; Commit {{ item.references.commit | short_sha }}{% if item.references.commit_url and item.references.commit_url.startswith('http') %} {{ item.references.commit_url }}{% endif %}{% endif %}){% elif item.references.commit %} (Commit {{ item.references.commit | short_sha }}{% if item.references.commit_url and item.references.commit_url.startswith('http') %} {{ item.references.commit_url }}{% endif %}){% endif %}
+
+{% if item.summary and item.summary != item.title %}
+    {{ item.summary }}
+{% endif %}
+{% for note in item.notes %}
+    BREAKING: {{ note }}
+{% endfor %}
+{% if item.details %}
+{% for line in item.details.splitlines() %}
+    {{ line }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+

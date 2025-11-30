@@ -1,0 +1,35 @@
+{# Markdown changelog template #}
+{% if changelog.version %}
+## Release {{ changelog.version }}
+{% else %}
+## Release
+{% endif %}
+{% if changelog.date_formatted %}
+_Released on {{ changelog.date_formatted }}_
+{% endif %}
+{% if changelog.metadata.compare_url %}
+[Compare changes]({{ changelog.metadata.compare_url }})
+{% endif %}
+
+{% for section in changelog.sections %}
+{% if section.changes %}
+### {{ section.title }}
+{% for item in section.changes %}
+- {% if item.scope %}**{{ item.scope }}** - {% endif %}{{ item.title }}{% if item.references.pr and item.metadata.pr_number %} ([#{{ item.metadata.pr_number }}]({{ item.references.pr }}){% if item.references.commit %}, [{{ item.references.commit | short_sha }}]({{ item.references.commit_url | default(item.references.commit, true) }}){% endif %}){% elif item.references.commit %} ({{ item.references.commit | short_sha }}){% endif %}
+
+{% if item.summary and item.summary != item.title %}
+  - _{{ item.summary }}_
+{% endif %}
+{% for note in item.notes %}
+  - BREAKING: {{ note }}
+{% endfor %}
+{% if item.details %}
+{% for line in item.details.splitlines() %}
+  > {{ line }}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+
