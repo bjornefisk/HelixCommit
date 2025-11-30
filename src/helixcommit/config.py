@@ -136,22 +136,37 @@ class FileConfig:
 class ConfigLoader:
     """Loads configuration from .helixcommit.toml or .helixcommit.yaml files."""
 
-    def __init__(self, repo_path: Optional[Path] = None) -> None:
+    def __init__(
+        self, repo_path: Optional[Path] = None, config_file: Optional[Path] = None
+    ) -> None:
         """Initialize the config loader.
 
         Args:
             repo_path: Path to the repository root. Defaults to current directory.
+            config_file: Explicit path to a config file. If provided, this file
+                will be used instead of searching for config files in repo_path.
         """
         self.repo_path = (repo_path or Path.cwd()).resolve()
+        self._config_file = config_file.resolve() if config_file else None
         self._config: Optional[FileConfig] = None
         self._loaded = False
 
     def find_config_file(self) -> Optional[Path]:
-        """Find the first config file in the repository root.
+        """Find the config file to use.
+
+        If an explicit config file was provided, returns that path.
+        Otherwise, searches for config files in the repository root.
 
         Returns:
             Path to the config file, or None if not found.
         """
+        # Use explicit config file if provided
+        if self._config_file is not None:
+            if self._config_file.is_file():
+                return self._config_file
+            return None
+
+        # Search for config files in repo root
         for filename in CONFIG_FILES:
             config_path = self.repo_path / filename
             if config_path.is_file():
@@ -281,16 +296,20 @@ class ConfigLoader:
         )
 
 
-def load_config(repo_path: Optional[Path] = None) -> FileConfig:
+def load_config(
+    repo_path: Optional[Path] = None, config_file: Optional[Path] = None
+) -> FileConfig:
     """Convenience function to load configuration from a repository.
 
     Args:
         repo_path: Path to the repository root. Defaults to current directory.
+        config_file: Explicit path to a config file. If provided, this file
+            will be used instead of searching for config files in repo_path.
 
     Returns:
         FileConfig with parsed settings.
     """
-    loader = ConfigLoader(repo_path)
+    loader = ConfigLoader(repo_path, config_file=config_file)
     return loader.load()
 
 

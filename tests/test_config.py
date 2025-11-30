@@ -585,3 +585,142 @@ ai:
     config = loader.load()
 
     assert config.ai.domain_scope == "Release notes for myapp project"
+
+
+# --- Explicit config file path tests ---
+
+
+def test_config_loader_explicit_config_file(tmp_path):
+    """ConfigLoader loads from explicit config file path."""
+    custom_config = tmp_path / "custom" / "my-config.toml"
+    custom_config.parent.mkdir(parents=True)
+    custom_config.write_text("""
+[generate]
+format = "html"
+
+[ai]
+enabled = true
+provider = "openai"
+""")
+
+    loader = ConfigLoader(tmp_path, config_file=custom_config)
+    config = loader.load()
+
+    assert config.source_path == custom_config
+    assert config.generate.format == "html"
+    assert config.ai.enabled is True
+    assert config.ai.provider == "openai"
+
+
+def test_config_loader_explicit_config_file_yaml(tmp_path):
+    """ConfigLoader loads from explicit YAML config file path."""
+    custom_config = tmp_path / "configs" / "project.yaml"
+    custom_config.parent.mkdir(parents=True)
+    custom_config.write_text("""
+generate:
+  format: text
+  no_merge_commits: true
+
+ai:
+  enabled: true
+  domain_scope: custom domain
+""")
+
+    loader = ConfigLoader(tmp_path, config_file=custom_config)
+    config = loader.load()
+
+    assert config.source_path == custom_config
+    assert config.generate.format == "text"
+    assert config.generate.no_merge_commits is True
+    assert config.ai.domain_scope == "custom domain"
+
+
+def test_config_loader_explicit_config_overrides_default(tmp_path):
+    """Explicit config file takes precedence over default config in repo."""
+    # Create default config in repo
+    default_config = tmp_path / ".helixcommit.toml"
+    default_config.write_text("""
+[generate]
+format = "markdown"
+""")
+
+    # Create custom config elsewhere
+    custom_config = tmp_path / "custom" / "config.toml"
+    custom_config.parent.mkdir(parents=True)
+    custom_config.write_text("""
+[generate]
+format = "json"
+""")
+
+    # Without explicit config, uses default
+    loader_default = ConfigLoader(tmp_path)
+    config_default = loader_default.load()
+    assert config_default.generate.format == "markdown"
+
+    # With explicit config, uses custom
+    loader_custom = ConfigLoader(tmp_path, config_file=custom_config)
+    config_custom = loader_custom.load()
+    assert config_custom.generate.format == "json"
+
+
+def test_config_loader_explicit_config_not_found(tmp_path):
+    """ConfigLoader returns defaults if explicit config file doesn't exist."""
+    nonexistent = tmp_path / "nonexistent.toml"
+
+    loader = ConfigLoader(tmp_path, config_file=nonexistent)
+    config = loader.load()
+
+    # Should return defaults since file doesn't exist
+    assert config.source_path is None
+    assert config.generate.format == "markdown"
+    assert config.ai.enabled is False
+
+
+def test_config_loader_explicit_config_templates_relative(tmp_path):
+    """Template paths in explicit config are relative to config file location."""
+    # Create custom config in subdirectory
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+
+    # Create templates relative to config location
+    templates_dir = config_dir / "templates"
+    templates_dir.mkdir()
+    template_file = templates_dir / "custom.md.j2"
+    template_file.write_text("# Custom Template")
+
+    custom_config = config_dir / "helixcommit.toml"
+    custom_config.write_text("""
+[templates]
+markdown = "templates/custom.md.j2"
+""")
+
+    loader = ConfigLoader(tmp_path, config_file=custom_config)
+    config = loader.load()
+
+    # Template path should be resolved relative to config file location
+    assert config.templates.markdown == template_file.resolve()
+
+
+def test_load_config_with_explicit_file(tmp_path):
+    """load_config convenience function accepts config_file parameter."""
+    custom_config = tmp_path / "my-config.yaml"
+    custom_config.write_text("""
+ai:
+  enabled: true
+  provider: openrouter
+""")
+
+    config = load_config(tmp_path, config_file=custom_config)
+
+    assert config.ai.enabled is True
+    assert config.ai.provider == "openrouter"
+
+
+def test_load_config_explicit_file_not_found(tmp_path):
+    """load_config returns defaults if explicit config file doesn't exist."""
+    nonexistent = tmp_path / "missing.toml"
+
+    config = load_config(tmp_path, config_file=nonexistent)
+
+    assert config.source_path is None
+    assert config.generate.format == "markdown"

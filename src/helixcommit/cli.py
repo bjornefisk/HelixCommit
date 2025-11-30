@@ -86,6 +86,15 @@ def generate(
         resolve_path=True,
         help="Repository path.",
     ),
+    config: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+        help="Path to config file (.helixcommit.toml or .helixcommit.yaml).",
+    ),
     since_tag: Optional[str] = typer.Option(None, help="Commits after this tag."),
     until_tag: Optional[str] = typer.Option(None, help="Commits up to this tag."),
     since: Optional[str] = typer.Option(None, help="Commits after this ref."),
@@ -159,8 +168,8 @@ def generate(
 
     repo = repo.resolve()
 
-    # Load config file from repo
-    file_config = load_config(repo)
+    # Load config file from repo (or explicit config path)
+    file_config = load_config(repo, config_file=config)
 
     # Apply config file values as defaults (CLI options override)
     if output_format is None:
@@ -405,6 +414,15 @@ def generate_commit(
         resolve_path=True,
         help="Repository path.",
     ),
+    config: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+        help="Path to config file (.helixcommit.toml or .helixcommit.yaml).",
+    ),
     llm_provider: Optional[str] = typer.Option(
         None, help="AI provider (openai/openrouter)."
     ),
@@ -421,8 +439,8 @@ def generate_commit(
     """Generate a commit message from staged changes."""
     repo = repo.resolve()
 
-    # Load config file from repo
-    file_config = load_config(repo)
+    # Load config file from repo (or explicit config path)
+    file_config = load_config(repo, config_file=config)
 
     # Apply config file values as defaults (CLI options override)
     if llm_provider is None:
