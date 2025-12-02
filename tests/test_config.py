@@ -41,6 +41,9 @@ def test_generate_config_defaults():
     assert config.no_merge_commits is False
     assert config.no_prs is False
     assert config.fail_on_empty is False
+    assert config.include_types == []
+    assert config.exclude_scopes == []
+    assert config.author_filter is None
 
 
 def test_generate_config_custom():
@@ -56,6 +59,17 @@ def test_generate_config_custom():
     assert config.no_merge_commits is True
     assert config.no_prs is True
     assert config.fail_on_empty is True
+
+
+def test_generate_config_filter_options():
+    config = GenerateConfig(
+        include_types=["feat", "fix"],
+        exclude_scopes=["deps", "ci"],
+        author_filter=".*@company\\.com",
+    )
+    assert config.include_types == ["feat", "fix"]
+    assert config.exclude_scopes == ["deps", "ci"]
+    assert config.author_filter == ".*@company\\.com"
 
 
 # --- AIConfig tests ---
@@ -231,6 +245,45 @@ ai:
     assert config.ai.provider == "openrouter"
     assert config.ai.domain_scope == "healthcare"
     assert config.ai.expert_roles == ["Doctor", "Nurse"]
+
+
+def test_config_loader_loads_filter_options_toml(tmp_path):
+    """ConfigLoader correctly parses filter options from TOML."""
+    config_file = tmp_path / ".helixcommit.toml"
+    config_file.write_text("""
+[generate]
+format = "markdown"
+include_types = ["feat", "fix", "docs"]
+exclude_scopes = ["deps", "ci"]
+author_filter = ".*@mycompany\\\\.com"
+""")
+
+    loader = ConfigLoader(tmp_path)
+    config = loader.load()
+
+    assert config.generate.include_types == ["feat", "fix", "docs"]
+    assert config.generate.exclude_scopes == ["deps", "ci"]
+    assert config.generate.author_filter == ".*@mycompany\\.com"
+
+
+def test_config_loader_loads_filter_options_yaml(tmp_path):
+    """ConfigLoader correctly parses filter options from YAML."""
+    config_file = tmp_path / ".helixcommit.yaml"
+    config_file.write_text("""generate:
+  include_types:
+    - feat
+    - fix
+  exclude_scopes:
+    - deps
+  author_filter: ".*@company\\\\.com"
+""")
+
+    loader = ConfigLoader(tmp_path)
+    config = loader.load()
+
+    assert config.generate.include_types == ["feat", "fix"]
+    assert config.generate.exclude_scopes == ["deps"]
+    assert config.generate.author_filter == ".*@company\\.com"
 
 
 def test_config_loader_partial_config(tmp_path):

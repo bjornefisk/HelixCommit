@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -12,6 +13,55 @@ from .parser import ParsedCommitMessage, classify_change_type, parse_commit_mess
 from .summarizer import BaseSummarizer, SummaryRequest
 
 MAX_SUMMARY_BODY_CHARS = 1600
+
+
+def filter_commits(
+    commits: Sequence[CommitInfo],
+    *,
+    include_types: Optional[Sequence[str]] = None,
+    exclude_scopes: Optional[Sequence[str]] = None,
+    author_filter: Optional[str] = None,
+) -> List[CommitInfo]:
+    """Filter commits based on type, scope, and author criteria.
+
+    Args:
+        commits: Sequence of commits to filter.
+        include_types: If provided, only include commits with these types (e.g., ["feat", "fix"]).
+        exclude_scopes: If provided, exclude commits with these scopes (e.g., ["deps", "ci"]).
+        author_filter: Regex pattern to match against author name or email.
+
+    Returns:
+        Filtered list of commits.
+    """
+    result: List[CommitInfo] = []
+    author_pattern = re.compile(author_filter, re.IGNORECASE) if author_filter else None
+
+    for commit in commits:
+        # Parse commit to extract type and scope
+        parsed = parse_commit_message(commit.message)
+        commit_type = parsed.type or classify_change_type(commit.message)
+        commit_scope = parsed.scope
+
+        # Filter by include_types
+        if include_types:
+            if commit_type not in include_types:
+                continue
+
+        # Filter by exclude_scopes
+        if exclude_scopes and commit_scope:
+            if commit_scope in exclude_scopes:
+                continue
+
+        # Filter by author_filter regex
+        if author_pattern:
+            name_match = author_pattern.search(commit.author_name or "")
+            email_match = author_pattern.search(commit.author_email or "")
+            if not (name_match or email_match):
+                continue
+
+        result.append(commit)
+
+    return result
 
 
 @dataclass
@@ -257,4 +307,4 @@ def _unique_list(values: List[str]) -> List[str]:
     return unique
 
 
-__all__ = ["ChangeBucket", "ChangelogBuilder", "CommitEntry"]
+__all__ = ["ChangeBucket", "ChangelogBuilder", "CommitEntry", "filter_commits"]

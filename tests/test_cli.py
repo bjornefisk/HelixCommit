@@ -105,3 +105,172 @@ def test_pr_and_mr_patterns_are_distinct():
     # GitLab pattern matches ! syntax
     assert _extract_mr_number(gitlab_message) == 123
     assert _extract_pr_number(gitlab_message) is None
+
+
+# --- Filtering Tests ---
+
+
+def test_cli_generate_include_types(tmp_path):
+    """Test --include-types filters commits by type."""
+    repo = git.Repo.init(tmp_path)
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "feature.txt", "Feature", "feat: add feature")
+    create_commit(repo, tmp_path, "bugfix.txt", "Fix", "fix: resolve bug")
+    last = create_commit(repo, tmp_path, "docs.txt", "Docs", "docs: update docs")
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--include-types",
+            "feat",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "add feature" in result.output
+    assert "resolve bug" not in result.output
+    assert "update docs" not in result.output
+
+
+def test_cli_generate_exclude_scopes(tmp_path):
+    """Test --exclude-scopes filters out commits with specified scopes."""
+    repo = git.Repo.init(tmp_path)
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "feature.txt", "Feature", "feat(auth): add auth")
+    create_commit(repo, tmp_path, "deps.txt", "Deps", "chore(deps): update packages")
+    last = create_commit(repo, tmp_path, "ui.txt", "UI", "feat(ui): improve button")
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--exclude-scopes",
+            "deps",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "add auth" in result.output
+    assert "improve button" in result.output
+    assert "update packages" not in result.output
+
+
+def test_cli_generate_author_filter(tmp_path):
+    """Test --author-filter filters commits by author regex."""
+    repo = git.Repo.init(tmp_path)
+    alice = git.Actor("Alice", "alice@company.com")
+    bob = git.Actor("Bob", "bob@external.com")
+
+    # Initial commit
+    readme = tmp_path / "README.md"
+    readme.write_text("Initial", encoding="utf-8")
+    repo.index.add(["README.md"])
+    initial = repo.index.commit("chore: initial", author=alice, committer=alice)
+
+    # Alice's commit
+    alice_file = tmp_path / "alice.txt"
+    alice_file.write_text("Alice feature", encoding="utf-8")
+    repo.index.add(["alice.txt"])
+    repo.index.commit("feat: alice feature", author=alice, committer=alice)
+
+    # Bob's commit
+    bob_file = tmp_path / "bob.txt"
+    bob_file.write_text("Bob feature", encoding="utf-8")
+    repo.index.add(["bob.txt"])
+    last = repo.index.commit("feat: bob feature", author=bob, committer=bob)
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--author-filter",
+            "@company\\.com$",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "alice feature" in result.output
+    assert "bob feature" not in result.output
+
+
+def test_cli_generate_combined_filters(tmp_path):
+    """Test combining multiple filter options."""
+    repo = git.Repo.init(tmp_path)
+    alice = git.Actor("Alice", "alice@company.com")
+
+    # Initial commit
+    readme = tmp_path / "README.md"
+    readme.write_text("Initial", encoding="utf-8")
+    repo.index.add(["README.md"])
+    initial = repo.index.commit("chore: initial", author=alice, committer=alice)
+
+    # feat(auth) - should be included
+    auth_file = tmp_path / "auth.txt"
+    auth_file.write_text("Auth", encoding="utf-8")
+    repo.index.add(["auth.txt"])
+    repo.index.commit("feat(auth): add auth", author=alice, committer=alice)
+
+    # feat(deps) - should be excluded
+    deps_file = tmp_path / "deps.txt"
+    deps_file.write_text("Deps", encoding="utf-8")
+    repo.index.add(["deps.txt"])
+    repo.index.commit("feat(deps): update deps", author=alice, committer=alice)
+
+    # fix(auth) - should be excluded (not feat)
+    fix_file = tmp_path / "fix.txt"
+    fix_file.write_text("Fix", encoding="utf-8")
+    repo.index.add(["fix.txt"])
+    last = repo.index.commit("fix(auth): fix auth bug", author=alice, committer=alice)
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--include-types",
+            "feat",
+            "--exclude-scopes",
+            "deps",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "add auth" in result.output
+    assert "update deps" not in result.output
+    assert "fix auth bug" not in result.output

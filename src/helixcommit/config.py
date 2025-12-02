@@ -80,6 +80,9 @@ class GenerateConfig:
     no_merge_commits: bool = False
     no_prs: bool = False
     fail_on_empty: bool = False
+    include_types: List[str] = field(default_factory=list)
+    exclude_scopes: List[str] = field(default_factory=list)
+    author_filter: Optional[str] = None
 
 
 @dataclass
@@ -250,6 +253,9 @@ class ConfigLoader:
             no_merge_commits=generate_data.get("no_merge_commits", False),
             no_prs=generate_data.get("no_prs", False),
             fail_on_empty=generate_data.get("fail_on_empty", False),
+            include_types=generate_data.get("include_types", []),
+            exclude_scopes=generate_data.get("exclude_scopes", []),
+            author_filter=generate_data.get("author_filter"),
         )
 
         ai_config = AIConfig(

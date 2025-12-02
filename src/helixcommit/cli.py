@@ -12,7 +12,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import typer
 
-from .changelog import ChangelogBuilder
+from .changelog import ChangelogBuilder, filter_commits
 from .commit_generator import CommitGenerator
 from .config import load_config
 from .formatters import html as html_formatter
@@ -213,6 +213,21 @@ def generate(
         "--use-builtin-templates",
         help="Use bundled Jinja2 templates instead of hardcoded formatters.",
     ),
+    include_types: Optional[List[str]] = typer.Option(
+        None,
+        "--include-types",
+        help="Only include commits of these types (space-separated: feat fix docs).",
+    ),
+    exclude_scopes: Optional[List[str]] = typer.Option(
+        None,
+        "--exclude-scopes",
+        help="Exclude commits with these scopes (space-separated: deps ci).",
+    ),
+    author_filter: Optional[str] = typer.Option(
+        None,
+        "--author-filter",
+        help="Regex pattern to filter commits by author name or email.",
+    ),
 ) -> None:
     """Generate release notes from commit history."""
 
@@ -248,6 +263,12 @@ def generate(
         expert_role = file_config.ai.expert_roles
     if rag_backend is None:
         rag_backend = RagBackend(file_config.ai.rag_backend)
+    if include_types is None and file_config.generate.include_types:
+        include_types = file_config.generate.include_types
+    if exclude_scopes is None and file_config.generate.exclude_scopes:
+        exclude_scopes = file_config.generate.exclude_scopes
+    if author_filter is None:
+        author_filter = file_config.generate.author_filter
 
     git_repo = GitRepository(repo)
 
@@ -263,6 +284,15 @@ def generate(
     )
 
     commits = list(git_repo.iter_commits(commit_range, include_diffs=include_diffs))
+
+    # Apply filtering
+    commits = filter_commits(
+        commits,
+        include_types=include_types,
+        exclude_scopes=exclude_scopes,
+        author_filter=author_filter,
+    )
+
     if not commits:
         message = "No commits found for the selected range."
         if fail_on_empty:
