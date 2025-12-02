@@ -98,6 +98,73 @@ def _validate_api_key(
     raise MissingApiKeyError(provider_lower, env_var)
 
 
+# Pattern for relative date expressions like "2 weeks ago", "3 days ago"
+RELATIVE_DATE_PATTERN = re.compile(
+    r"^(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago$",
+    re.IGNORECASE,
+)
+
+
+def _parse_date(value: str) -> datetime:
+    """Parse a flexible date string into a timezone-aware datetime.
+
+    Supports:
+    - ISO 8601 dates (e.g., '2024-01-15', '2024-01-15T10:30:00')
+    - Relative expressions (e.g., '2 weeks ago', '3 days ago', 'yesterday')
+    - Natural language dates via dateutil.parser
+
+    Args:
+        value: The date string to parse.
+
+    Returns:
+        A timezone-aware datetime object (UTC).
+
+    Raises:
+        typer.BadParameter: If the date string cannot be parsed.
+    """
+    from dateutil import parser as date_parser
+    from dateutil.relativedelta import relativedelta
+
+    value = value.strip()
+
+    # Handle special keywords
+    if value.lower() == "yesterday":
+        return datetime.now(timezone.utc) - relativedelta(days=1)
+    if value.lower() == "today":
+        return datetime.now(timezone.utc)
+
+    # Handle relative expressions like "2 weeks ago"
+    match = RELATIVE_DATE_PATTERN.match(value)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2).lower()
+        # Map singular to plural for relativedelta kwargs
+        unit_map = {
+            "second": "seconds",
+            "minute": "minutes",
+            "hour": "hours",
+            "day": "days",
+            "week": "weeks",
+            "month": "months",
+            "year": "years",
+        }
+        kwargs = {unit_map[unit]: amount}
+        return datetime.now(timezone.utc) - relativedelta(**kwargs)
+
+    # Try parsing as ISO or natural date
+    try:
+        parsed = date_parser.parse(value)
+        # Ensure timezone-aware (default to UTC if naive)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except (ValueError, TypeError) as e:
+        raise typer.BadParameter(
+            f"Cannot parse date '{value}'. Use ISO format (e.g., '2024-01-15') "
+            f"or relative expressions (e.g., '2 weeks ago')."
+        ) from e
+
+
 def _typer_app() -> typer.Typer:
     return typer.Typer(help="Generate release notes from Git repositories.", no_args_is_help=True)
 
@@ -149,6 +216,12 @@ def generate(
     until_tag: Optional[str] = typer.Option(None, help="Commits up to this tag."),
     since: Optional[str] = typer.Option(None, help="Commits after this ref."),
     until: Optional[str] = typer.Option(None, help="Commits up to this ref."),
+    since_date: Optional[str] = typer.Option(
+        None, help="Commits after this date (ISO or relative, e.g., '2024-01-15', '2 weeks ago')."
+    ),
+    until_date: Optional[str] = typer.Option(
+        None, help="Commits before this date (ISO or relative, e.g., '2024-06-01', 'yesterday')."
+    ),
     unreleased: bool = typer.Option(False, help="HEAD vs latest tag."),
     output_format: Optional[OutputFormat] = typer.Option(
         None, "--format", case_sensitive=False, help="Output format (markdown/html/text/json)."
@@ -278,6 +351,8 @@ def generate(
         until_tag=until_tag,
         since=since,
         until=until,
+        since_date=since_date,
+        until_date=until_date,
         unreleased=unreleased,
         include_merges=not no_merge_commits,
         max_items=max_items,
@@ -625,6 +700,8 @@ def _resolve_commit_range(
     until_tag: Optional[str],
     since: Optional[str],
     until: Optional[str],
+    since_date: Optional[str],
+    until_date: Optional[str],
     unreleased: bool,
     include_merges: bool,
     max_items: Optional[int],
@@ -643,9 +720,15 @@ def _resolve_commit_range(
             since_ref = latest_tag.name
             resolved_since_tag = latest_tag
 
+    # Parse date filters if provided
+    parsed_since_date = _parse_date(since_date) if since_date else None
+    parsed_until_date = _parse_date(until_date) if until_date else None
+
     commit_range = CommitRange(
         since=since_ref,
         until=until_ref,
+        since_date=parsed_since_date,
+        until_date=parsed_until_date,
         include_merges=include_merges,
         max_count=max_items,
     )

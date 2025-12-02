@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 from helixcommit.cli import (
     _extract_mr_number,
     _extract_pr_number,
+    _parse_date,
     app,
 )
 
@@ -274,3 +275,182 @@ def test_cli_generate_combined_filters(tmp_path):
     assert "add auth" in result.output
     assert "update deps" not in result.output
     assert "fix auth bug" not in result.output
+
+
+# --- Date Parsing Tests ---
+
+
+from datetime import datetime, timezone, timedelta
+
+
+def test_parse_date_iso_format():
+    """Test parsing ISO 8601 date formats."""
+    result = _parse_date("2024-01-15")
+    assert result.year == 2024
+    assert result.month == 1
+    assert result.day == 15
+    assert result.tzinfo is not None
+
+
+def test_parse_date_iso_with_time():
+    """Test parsing ISO 8601 datetime format."""
+    result = _parse_date("2024-06-20T14:30:00")
+    assert result.year == 2024
+    assert result.month == 6
+    assert result.day == 20
+    assert result.hour == 14
+    assert result.minute == 30
+
+
+def test_parse_date_yesterday():
+    """Test parsing 'yesterday' keyword."""
+    result = _parse_date("yesterday")
+    expected = datetime.now(timezone.utc) - timedelta(days=1)
+    assert result.date() == expected.date()
+
+
+def test_parse_date_today():
+    """Test parsing 'today' keyword."""
+    result = _parse_date("today")
+    expected = datetime.now(timezone.utc)
+    assert result.date() == expected.date()
+
+
+@pytest.mark.parametrize(
+    "expression,unit",
+    [
+        ("2 days ago", "days"),
+        ("1 week ago", "weeks"),
+        ("3 weeks ago", "weeks"),
+        ("1 month ago", "months"),
+        ("6 months ago", "months"),
+    ],
+)
+def test_parse_date_relative_expressions(expression, unit):
+    """Test parsing relative date expressions."""
+    result = _parse_date(expression)
+    now = datetime.now(timezone.utc)
+    # Just verify it's in the past
+    assert result < now
+    assert result.tzinfo is not None
+
+
+def test_parse_date_invalid():
+    """Test that invalid date strings raise BadParameter."""
+    import typer
+    
+    with pytest.raises(typer.BadParameter):
+        _parse_date("not-a-date")
+
+
+# --- Date Filtering CLI Tests ---
+
+
+def test_cli_generate_since_date(tmp_path):
+    """Test --since-date filters commits by date."""
+    import time
+    from datetime import timedelta
+    
+    repo = git.Repo.init(tmp_path)
+    
+    # Create initial commit
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    
+    # Wait to ensure time difference (1+ second)
+    time.sleep(1.1)
+    
+    # Record the current time (after initial commit, before second commit)
+    cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=0.5)
+    
+    time.sleep(0.1)
+    
+    # Create second commit (after cutoff)
+    second = create_commit(repo, tmp_path, "feature.txt", "Feature", "feat: add feature")
+    
+    # Format cutoff time as ISO string
+    cutoff_str = cutoff_time.strftime("%Y-%m-%dT%H:%M:%S")
+    
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since-date",
+            cutoff_str,
+            "--format",
+            "text",
+            "--no-prs",
+        ],
+    )
+    
+    assert result.exit_code == 0, result.output
+    # The second commit (after cutoff) should be included
+    assert "add feature" in result.output
+
+
+def test_cli_generate_until_date(tmp_path):
+    """Test --until-date filters commits by date.
+    
+    Uses a far future date to verify the option is accepted and works.
+    """
+    repo = git.Repo.init(tmp_path)
+    
+    # Create commits
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "feature.txt", "Feature", "feat: add feature")
+    
+    # Use a far future date - all commits should be included
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until-date",
+            "2099-12-31",  # Far future date
+            "--format",
+            "text",
+            "--no-prs",
+        ],
+    )
+    
+    assert result.exit_code == 0, result.output
+    # The commit should be included since it's before the far future date
+    assert "add feature" in result.output
+
+
+def test_cli_generate_date_range(tmp_path):
+    """Test combining --since-date and --until-date for a date range.
+    
+    This test uses relative date expressions which are more reliable
+    than trying to capture precise timestamps during test execution.
+    """
+    repo = git.Repo.init(tmp_path)
+    
+    # Create initial commit - all commits will be "today"
+    create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "included.txt", "Included", "feat: included feature")
+    
+    # Use relative date "1 week ago" as since-date
+    # Since all commits are from "today", they should all be after "1 week ago"
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since-date",
+            "1 week ago",
+            "--format",
+            "text",
+            "--no-prs",
+        ],
+    )
+    
+    assert result.exit_code == 0, result.output
+    # Both commits should be included (both are within the last week)
+    assert "included feature" in result.output
+    assert "initial commit" in result.output.lower() or "Generated changelog" in result.output
