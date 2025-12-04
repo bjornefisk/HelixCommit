@@ -95,7 +95,7 @@ class AIConfig:
     enabled: bool = False
     provider: str = "openrouter"
     openai_model: str = "gpt-4o-mini"
-    openrouter_model: str = "openrouter/auto"
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
     include_diffs: bool = False
     domain_scope: Optional[str] = None
     expert_roles: List[str] = field(default_factory=list)
@@ -268,7 +268,9 @@ class ConfigLoader:
             enabled=ai_data.get("enabled", False),
             provider=ai_data.get("provider", "openrouter"),
             openai_model=ai_data.get("openai_model", "gpt-4o-mini"),
-            openrouter_model=ai_data.get("openrouter_model", "openrouter/auto"),
+            openrouter_model=ai_data.get(
+                "openrouter_model", "meta-llama/llama-3.3-70b-instruct:free"
+            ),
             include_diffs=ai_data.get("include_diffs", False),
             domain_scope=ai_data.get("domain_scope"),
             expert_roles=ai_data.get("expert_roles", []),

@@ -89,7 +89,7 @@ def test_ai_config_defaults():
     assert config.enabled is False
     assert config.provider == "openrouter"
     assert config.openai_model == "gpt-4o-mini"
-    assert config.openrouter_model == "openrouter/auto"
+    assert config.openrouter_model == "meta-llama/llama-3.3-70b-instruct:free"
     assert config.include_diffs is False
     assert config.domain_scope is None
     assert config.expert_roles == []
