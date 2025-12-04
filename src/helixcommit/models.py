@@ -22,6 +22,7 @@ class CommitInfo:
     pr_number: Optional[int] = None
     labels: List[str] = field(default_factory=list)
     diff: Optional[str] = None
+    files: List[str] = field(default_factory=list)
 
     @property
     def message(self) -> str:

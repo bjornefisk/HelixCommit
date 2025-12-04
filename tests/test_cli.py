@@ -18,6 +18,7 @@ def create_commit(
     repo: git.Repo, base_path: Path, relative: str, content: str, message: str
 ) -> git.Commit:
     file_path = base_path / relative
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
     repo.index.add([relative])
     actor = git.Actor("Test User", "test@example.com")
@@ -275,6 +276,96 @@ def test_cli_generate_combined_filters(tmp_path):
     assert "add auth" in result.output
     assert "update deps" not in result.output
     assert "fix auth bug" not in result.output
+
+
+def test_cli_generate_include_paths(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "src/app.py", "print('hi')", "feat: add app")
+    last = create_commit(repo, tmp_path, "docs/readme.md", "Docs", "docs: update docs")
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--include-paths",
+            "src",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "add app" in result.output
+    assert "update docs" not in result.output
+
+
+def test_cli_generate_exclude_paths(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "src/app.py", "print('hi')", "feat: add app")
+    last = create_commit(repo, tmp_path, "docs/readme.md", "Docs", "docs: update docs")
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--exclude-paths",
+            "docs",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "add app" in result.output
+    assert "update docs" not in result.output
+
+
+def test_cli_generate_section_order_option(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    initial = create_commit(repo, tmp_path, "README.md", "Initial", "chore: initial commit")
+    create_commit(repo, tmp_path, "fix.txt", "Bug fix", "fix: patch bug")
+    last = create_commit(repo, tmp_path, "feat.txt", "Feature", "feat: add feature")
+
+    result = runner.invoke(
+        app,
+        [
+            "generate",
+            "--repo",
+            str(tmp_path),
+            "--since",
+            initial.hexsha,
+            "--until",
+            last.hexsha,
+            "--format",
+            "text",
+            "--no-prs",
+            "--section-order",
+            "fix",
+            "--section-order",
+            "feat",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    fixes_index = result.output.index("FIXES")
+    features_index = result.output.index("FEATURES")
+    assert fixes_index < features_index
 
 
 # --- Date Parsing Tests ---

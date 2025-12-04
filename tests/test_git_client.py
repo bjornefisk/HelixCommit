@@ -9,6 +9,7 @@ def create_commit(
     repo: git.Repo, base_path: Path, relative: str, content: str, message: str
 ) -> git.Commit:
     file_path = base_path / relative
+    file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(content, encoding="utf-8")
     repo.index.add([relative])
     actor = git.Actor("Test User", "test@example.com")
@@ -65,6 +66,40 @@ def test_git_repository_include_diffs(tmp_path):
     assert len(commits) == 1
     assert commits[0].diff is not None
     assert "Updated" in commits[0].diff
+
+
+def test_git_repository_paths_filter(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    create_commit(
+        repo, Path(tmp_path), "README.md", "Initial", "chore: initial commit"
+    )
+    second = create_commit(
+        repo, Path(tmp_path), "feature.txt", "Feature", "feat: add feature"
+    )
+    create_commit(
+        repo, Path(tmp_path), "docs.txt", "Docs", "docs: add docs"
+    )
+
+    git_repo = GitRepository(tmp_path)
+    commit_range = CommitRange(paths=("feature.txt",))
+    commits = list(git_repo.iter_commits(commit_range))
+
+    assert len(commits) == 1
+    assert commits[0].sha == second.hexsha
+
+
+def test_git_repository_collects_files(tmp_path):
+    repo = git.Repo.init(tmp_path)
+    create_commit(
+        repo, Path(tmp_path), "src/app.py", "print('hi')\n", "feat: add app"
+    )
+
+    git_repo = GitRepository(tmp_path)
+    commit_range = CommitRange(max_count=1)
+    commits = list(git_repo.iter_commits(commit_range, include_files=True))
+
+    assert commits
+    assert commits[0].files == ["src/app.py"]
 
 
 def test_get_gitlab_slug_https(tmp_path):

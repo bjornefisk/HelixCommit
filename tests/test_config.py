@@ -44,6 +44,9 @@ def test_generate_config_defaults():
     assert config.include_types == []
     assert config.exclude_scopes == []
     assert config.author_filter is None
+    assert config.include_paths == []
+    assert config.exclude_paths == []
+    assert config.section_order == []
 
 
 def test_generate_config_custom():
@@ -66,10 +69,16 @@ def test_generate_config_filter_options():
         include_types=["feat", "fix"],
         exclude_scopes=["deps", "ci"],
         author_filter=".*@company\\.com",
+        include_paths=["src"],
+        exclude_paths=["docs"],
+        section_order=["fix", "feat"],
     )
     assert config.include_types == ["feat", "fix"]
     assert config.exclude_scopes == ["deps", "ci"]
     assert config.author_filter == ".*@company\\.com"
+    assert config.include_paths == ["src"]
+    assert config.exclude_paths == ["docs"]
+    assert config.section_order == ["fix", "feat"]
 
 
 # --- AIConfig tests ---
@@ -80,7 +89,7 @@ def test_ai_config_defaults():
     assert config.enabled is False
     assert config.provider == "openrouter"
     assert config.openai_model == "gpt-4o-mini"
-    assert config.openrouter_model == "x-ai/grok-4.1-fast:free"
+    assert config.openrouter_model == "openrouter/auto"
     assert config.include_diffs is False
     assert config.domain_scope is None
     assert config.expert_roles == []
@@ -256,6 +265,9 @@ format = "markdown"
 include_types = ["feat", "fix", "docs"]
 exclude_scopes = ["deps", "ci"]
 author_filter = ".*@mycompany\\\\.com"
+include_paths = ["src", "lib/utils.py"]
+exclude_paths = ["docs"]
+section_order = ["fix", "feat"]
 """)
 
     loader = ConfigLoader(tmp_path)
@@ -264,18 +276,28 @@ author_filter = ".*@mycompany\\\\.com"
     assert config.generate.include_types == ["feat", "fix", "docs"]
     assert config.generate.exclude_scopes == ["deps", "ci"]
     assert config.generate.author_filter == ".*@mycompany\\.com"
+    assert config.generate.include_paths == ["src", "lib/utils.py"]
+    assert config.generate.exclude_paths == ["docs"]
+    assert config.generate.section_order == ["fix", "feat"]
 
 
 def test_config_loader_loads_filter_options_yaml(tmp_path):
     """ConfigLoader correctly parses filter options from YAML."""
     config_file = tmp_path / ".helixcommit.yaml"
-    config_file.write_text("""generate:
-  include_types:
-    - feat
-    - fix
-  exclude_scopes:
-    - deps
-  author_filter: ".*@company\\\\.com"
+        config_file.write_text("""generate:
+    include_types:
+        - feat
+        - fix
+    exclude_scopes:
+        - deps
+    author_filter: ".*@company\\\\.com"
+    include_paths:
+        - src
+    exclude_paths:
+        - docs
+    section_order:
+        - fix
+        - feat
 """)
 
     loader = ConfigLoader(tmp_path)
@@ -284,6 +306,9 @@ def test_config_loader_loads_filter_options_yaml(tmp_path):
     assert config.generate.include_types == ["feat", "fix"]
     assert config.generate.exclude_scopes == ["deps"]
     assert config.generate.author_filter == ".*@company\\.com"
+    assert config.generate.include_paths == ["src"]
+    assert config.generate.exclude_paths == ["docs"]
+    assert config.generate.section_order == ["fix", "feat"]
 
 
 def test_config_loader_partial_config(tmp_path):

@@ -12,6 +12,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import typer
 
+from . import __version__
 from .changelog import ChangelogBuilder, filter_commits
 from .commit_generator import CommitGenerator
 from .config import load_config
@@ -20,6 +21,7 @@ from .formatters import json as json_formatter
 from .formatters import markdown as markdown_formatter
 from .formatters import text as text_formatter
 from .formatters import yaml as yaml_formatter
+from .grouper import SECTION_ALIASES, SECTION_TITLES
 from .template import TemplateEngine, detect_format_from_template
 from .bitbucket_client import BitbucketClient, BitbucketSettings
 from .git_client import CommitRange, GitRepository, TagInfo
@@ -172,6 +174,28 @@ def _typer_app() -> typer.Typer:
 app = _typer_app()
 
 
+def _version_callback(value: bool) -> bool:
+    if value:
+        typer.echo(f"{APP_NAME} v{__version__}")
+        raise typer.Exit()
+    return value
+
+
+@app.callback()
+def _main_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show HelixCommit version and exit.",
+    )
+) -> None:
+    """Global options available to all commands."""
+    return
+
+
 class OutputFormat(str, Enum):
     markdown = "markdown"
     html = "html"
@@ -296,6 +320,21 @@ def generate(
         "--exclude-scopes",
         help="Exclude commits with these scopes (space-separated: deps ci).",
     ),
+    include_paths: Optional[List[str]] = typer.Option(
+        None,
+        "--include-paths",
+        help="Only include commits touching these paths (supports glob patterns).",
+    ),
+    exclude_paths: Optional[List[str]] = typer.Option(
+        None,
+        "--exclude-paths",
+        help="Exclude commits touching these paths (supports glob patterns).",
+    ),
+    section_order: Optional[List[str]] = typer.Option(
+        None,
+        "--section-order",
+        help="Custom section ordering (repeatable, e.g., --section-order fix --section-order feat).",
+    ),
     author_filter: Optional[str] = typer.Option(
         None,
         "--author-filter",
@@ -340,6 +379,12 @@ def generate(
         include_types = file_config.generate.include_types
     if exclude_scopes is None and file_config.generate.exclude_scopes:
         exclude_scopes = file_config.generate.exclude_scopes
+    if include_paths is None and file_config.generate.include_paths:
+        include_paths = file_config.generate.include_paths
+    if exclude_paths is None and file_config.generate.exclude_paths:
+        exclude_paths = file_config.generate.exclude_paths
+    if section_order is None and file_config.generate.section_order:
+        section_order = file_config.generate.section_order
     if author_filter is None:
         author_filter = file_config.generate.author_filter
 
@@ -358,7 +403,23 @@ def generate(
         max_items=max_items,
     )
 
-    commits = list(git_repo.iter_commits(commit_range, include_diffs=include_diffs))
+    if include_paths:
+        commit_range.paths = tuple(include_paths)
+
+    normalized_section_order = _normalize_section_order(section_order)
+    if section_order and not normalized_section_order:
+        raise typer.BadParameter(
+            "--section-order only accepts known section keys or titles (e.g., feat, fix, docs)."
+        )
+
+    collect_files = bool(include_paths or exclude_paths)
+    commits = list(
+        git_repo.iter_commits(
+            commit_range,
+            include_diffs=include_diffs,
+            include_files=collect_files,
+        )
+    )
 
     # Apply filtering
     commits = filter_commits(
@@ -366,6 +427,8 @@ def generate(
         include_types=include_types,
         exclude_scopes=exclude_scopes,
         author_filter=author_filter,
+        include_paths=include_paths,
+        exclude_paths=exclude_paths,
     )
 
     if not commits:
@@ -462,6 +525,7 @@ def generate(
     builder = ChangelogBuilder(
         summarizer=summarizer,
         include_scopes=include_scopes,
+        section_order=normalized_section_order,
     )
 
     version_name = context.until_tag.name if context.until_tag else "Unreleased"
@@ -975,6 +1039,35 @@ def _write_output(content: str, destination: Optional[Path]) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding="utf-8")
         typer.echo(f"Wrote changelog to {destination}")
+
+
+def _normalize_section_order(values: Optional[Sequence[str]]) -> Optional[List[str]]:
+    if not values:
+        return None
+    seen = set()
+    normalized: List[str] = []
+    for value in values:
+        canonical = _canonical_section_key(value)
+        if canonical and canonical not in seen:
+            seen.add(canonical)
+            normalized.append(canonical)
+    return normalized or None
+
+
+def _canonical_section_key(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    key = value.strip().lower()
+    if not key:
+        return None
+    if key in SECTION_TITLES:
+        return key
+    if key in SECTION_ALIASES:
+        return SECTION_ALIASES[key]
+    for canonical, title in SECTION_TITLES.items():
+        if title.lower() == key:
+            return canonical
+    return None
     else:
         typer.echo(content)
 

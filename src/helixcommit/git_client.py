@@ -7,7 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 from dateutil import tz
 
@@ -77,13 +77,21 @@ class GitRepository:
     # Public API
     # ------------------------------------------------------------------
     def iter_commits(
-        self, commit_range: CommitRange, include_diffs: bool = False
+        self,
+        commit_range: CommitRange,
+        *,
+        include_diffs: bool = False,
+        include_files: bool = False,
     ) -> Iterator[CommitInfo]:
         """Iterate over commits in the given range."""
         if self._use_gitpython:
-            yield from self._iter_commits_gitpython(commit_range, include_diffs=include_diffs)
+            yield from self._iter_commits_gitpython(
+                commit_range, include_diffs=include_diffs, include_files=include_files
+            )
         else:
-            yield from self._iter_commits_cli(commit_range, include_diffs=include_diffs)
+            yield from self._iter_commits_cli(
+                commit_range, include_diffs=include_diffs, include_files=include_files
+            )
 
     def get_commit_diff(self, sha: str, max_chars: int = 4000) -> str:
         """Fetch the diff for a specific commit, truncated to max_chars."""
@@ -264,7 +272,11 @@ class GitRepository:
     # Internal helpers
     # ------------------------------------------------------------------
     def _iter_commits_gitpython(
-        self, commit_range: CommitRange, include_diffs: bool = False
+        self,
+        commit_range: CommitRange,
+        *,
+        include_diffs: bool = False,
+        include_files: bool = False,
     ) -> Iterator[CommitInfo]:
         assert self._repo is not None  # for type checkers
         kwargs = {
@@ -297,6 +309,10 @@ class GitRepository:
             if include_diffs:
                 diff = self.get_commit_diff(raw_commit.hexsha)
 
+            files: List[str] = []
+            if include_files:
+                files = self._get_commit_files_gitpython(raw_commit)
+
             yield CommitInfo(
                 sha=raw_commit.hexsha,
                 subject=subject,
@@ -307,10 +323,15 @@ class GitRepository:
                 committed_date=committed_date,
                 is_merge=len(raw_commit.parents) > 1,
                 diff=diff,
+                files=files,
             )
 
     def _iter_commits_cli(
-        self, commit_range: CommitRange, include_diffs: bool = False
+        self,
+        commit_range: CommitRange,
+        *,
+        include_diffs: bool = False,
+        include_files: bool = False,
     ) -> Iterator[CommitInfo]:
         rev = commit_range.rev_spec()
         args = [
@@ -350,6 +371,10 @@ class GitRepository:
             if include_diffs:
                 diff = self.get_commit_diff(sha)
 
+            files: List[str] = []
+            if include_files:
+                files = self._get_commit_files_cli(sha)
+
             yield CommitInfo(
                 sha=sha,
                 subject=subject.strip(),
@@ -360,7 +385,22 @@ class GitRepository:
                 committed_date=datetime.fromtimestamp(int(commit_ts), tz=UTC),
                 is_merge=len(parents.split()) > 1,
                 diff=diff,
+                files=files,
             )
+
+    def _get_commit_files_gitpython(self, raw_commit: Any) -> List[str]:
+        try:
+            stats = raw_commit.stats.files or {}
+            return sorted(stats.keys())
+        except Exception:
+            return []
+
+    def _get_commit_files_cli(self, sha: str) -> List[str]:
+        try:
+            output = self._run_git("show", "--pretty=format:", "--name-only", sha)
+        except Exception:
+            return []
+        return [line.strip() for line in output.splitlines() if line.strip()]
 
     def _list_tags_gitpython(self) -> List[TagInfo]:
         assert self._repo is not None

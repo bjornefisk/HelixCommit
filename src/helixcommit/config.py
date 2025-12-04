@@ -83,6 +83,9 @@ class GenerateConfig:
     include_types: List[str] = field(default_factory=list)
     exclude_scopes: List[str] = field(default_factory=list)
     author_filter: Optional[str] = None
+    include_paths: List[str] = field(default_factory=list)
+    exclude_paths: List[str] = field(default_factory=list)
+    section_order: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -92,7 +95,7 @@ class AIConfig:
     enabled: bool = False
     provider: str = "openrouter"
     openai_model: str = "gpt-4o-mini"
-    openrouter_model: str = "x-ai/grok-4.1-fast:free"
+    openrouter_model: str = "openrouter/auto"
     include_diffs: bool = False
     domain_scope: Optional[str] = None
     expert_roles: List[str] = field(default_factory=list)
@@ -256,13 +259,16 @@ class ConfigLoader:
             include_types=generate_data.get("include_types", []),
             exclude_scopes=generate_data.get("exclude_scopes", []),
             author_filter=generate_data.get("author_filter"),
+            include_paths=generate_data.get("include_paths", []),
+            exclude_paths=generate_data.get("exclude_paths", []),
+            section_order=generate_data.get("section_order", []),
         )
 
         ai_config = AIConfig(
             enabled=ai_data.get("enabled", False),
             provider=ai_data.get("provider", "openrouter"),
             openai_model=ai_data.get("openai_model", "gpt-4o-mini"),
-            openrouter_model=ai_data.get("openrouter_model", "x-ai/grok-4.1-fast:free"),
+            openrouter_model=ai_data.get("openrouter_model", "openrouter/auto"),
             include_diffs=ai_data.get("include_diffs", False),
             domain_scope=ai_data.get("domain_scope"),
             expert_roles=ai_data.get("expert_roles", []),

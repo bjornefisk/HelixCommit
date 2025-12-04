@@ -1,6 +1,7 @@
 """Tests for the filter_commits function in changelog.py."""
 
 from datetime import datetime, timezone
+from typing import List, Optional
 
 import pytest
 
@@ -14,6 +15,7 @@ def make_commit(
     body: str = "",
     author_name: str = "Test User",
     author_email: str = "test@example.com",
+    files: Optional[List[str]] = None,
 ) -> CommitInfo:
     """Create a CommitInfo for testing."""
     now = datetime.now(timezone.utc)
@@ -25,6 +27,7 @@ def make_commit(
         author_email=author_email,
         authored_date=now,
         committed_date=now,
+        files=files or [],
     )
 
 
@@ -267,4 +270,48 @@ class TestCombinedFilters:
         )
 
         assert len(result) == 0
+
+
+class TestFilterCommitsByPath:
+    """Tests for include/exclude path filtering."""
+
+    def test_include_paths_requires_match(self):
+        commits = [
+            make_commit(sha="1", files=["src/app.py"]),
+            make_commit(sha="2", files=["docs/readme.md"]),
+        ]
+
+        result = filter_commits(commits, include_paths=["src"])
+
+        assert len(result) == 1
+        assert result[0].sha == "1"
+
+    def test_include_paths_glob(self):
+        commits = [
+            make_commit(sha="1", files=["src/app.py"]),
+            make_commit(sha="2", files=["docs/readme.md"]),
+        ]
+
+        result = filter_commits(commits, include_paths=["docs/*.md"])
+
+        assert len(result) == 1
+        assert result[0].sha == "2"
+
+    def test_exclude_paths_filters_commits(self):
+        commits = [
+            make_commit(sha="1", files=["src/app.py"]),
+            make_commit(sha="2", files=["chore/update-deps.txt"]),
+        ]
+
+        result = filter_commits(commits, exclude_paths=["chore"])
+
+        assert len(result) == 1
+        assert result[0].sha == "1"
+
+    def test_path_filters_ignore_commits_without_files(self):
+        commits = [make_commit(sha="1", files=[])]
+
+        result = filter_commits(commits, include_paths=["src"])
+
+        assert result == []
 
