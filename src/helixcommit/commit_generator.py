@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 try:  # pragma: no cover - optional dependency guard
@@ -42,11 +41,9 @@ class CommitGenerator:
 
     def generate(self, diff: str) -> str:
         """Start the generation process with a diff."""
-        today = datetime.now().strftime("%m-%d-%Y")
         system_prompt = (
-            f"You are an expert developer. Today is {today}. "
+            "You are an expert developer. "
             "Your task is to generate a concise and descriptive commit message based on the provided git diff. "
-            "The final commit message format must be 'MM-DD-YYYY: {message}', but you should focus on drafting the '{message}' part first. "
             "If the diff is large, complex, or ambiguous, ask the user clarifying questions to understand the intent. "
             "If the changes are clear, propose a commit message. "
             "Be concise and professional."
