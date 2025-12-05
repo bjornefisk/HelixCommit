@@ -1039,6 +1039,8 @@ def _write_output(content: str, destination: Optional[Path]) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding="utf-8")
         typer.echo(f"Wrote changelog to {destination}")
+    else:
+        typer.echo(content)
 
 
 def _normalize_section_order(values: Optional[Sequence[str]]) -> Optional[List[str]]:
@@ -1068,8 +1070,6 @@ def _canonical_section_key(value: Optional[str]) -> Optional[str]:
         if title.lower() == key:
             return canonical
     return None
-    else:
-        typer.echo(content)
 
 
 def main() -> None:  # pragma: no cover - console entrypoint

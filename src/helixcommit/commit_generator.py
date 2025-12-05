@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 try:  # pragma: no cover - optional dependency guard
-    from openai import OpenAI
+    from openai import OpenAI, RateLimitError
 except ImportError:  # pragma: no cover - optional dependency guard
     OpenAI = None  # type: ignore[assignment]
+    RateLimitError = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     # Precise type for messages passed to chat.completions.create
@@ -62,12 +64,42 @@ class CommitGenerator:
         self.history.append({"role": "user", "content": user_input})
         return self._call_llm()
 
-    def _call_llm(self) -> str:
-        """Call the LLM and update history."""
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=self.history,
-        )
-        content = response.choices[0].message.content or ""
-        self.history.append({"role": "assistant", "content": content})
-        return content
+    def _call_llm(self, max_retries: int = 3) -> str:
+        """Call the LLM and update history with exponential backoff retry logic."""
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=self.history,
+                )
+                content = response.choices[0].message.content or ""
+                self.history.append({"role": "assistant", "content": content})
+                return content
+            except RateLimitError as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    # Calculate exponential backoff: 2^attempt seconds
+                    wait_time = 2 ** attempt
+                    print(
+                        f"\n⚠️  Rate limit exceeded. Retrying in {wait_time} seconds "
+                        f"(attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(wait_time)
+                else:
+                    # Last attempt failed
+                    error_msg = str(e)
+                    if "free-models-per-day" in error_msg:
+                        raise RuntimeError(
+                            "Rate limit exceeded on free-tier model. "
+                            "You have exhausted your daily free requests. "
+                            "Options:\n"
+                            "1. Add credits to your OpenRouter account\n"
+                            "2. Use a different LLM provider (OpenAI, Anthropic, etc.)\n"
+                            "3. Try again tomorrow"
+                        ) from e
+                    raise
+            except Exception as e:
+                # Other errors should fail immediately
+                raise
