@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -43,10 +44,9 @@ class CommitGenerator:
         """Start the generation process with a diff."""
         system_prompt = (
             "You are an expert developer. "
-            "Your task is to generate a concise and descriptive commit message based on the provided git diff. "
-            "If the diff is large, complex, or ambiguous, ask the user clarifying questions to understand the intent. "
-            "If the changes are clear, propose a commit message. "
-            "Be concise and professional."
+            "Generate a single-line commit subject only (no body, no explanation). "
+            "Use imperative tone and keep it concise and professional. "
+            "If the diff is unclear, ask for clarification first; otherwise respond only with the commit subject."
         )
 
         self.history = [
@@ -55,6 +55,31 @@ class CommitGenerator:
         ]
 
         return self._call_llm()
+
+    def to_subject(self, text: str) -> str:
+        """Normalize an LLM response down to a single commit subject line."""
+        if not text:
+            return ""
+
+        lines = [ln.strip() for ln in text.replace("\r\n", "\n").split("\n") if ln.strip()]
+        if not lines:
+            return ""
+
+        subject = lines[0]
+
+        # Strip common prefixes and bullet markers
+        subject = re.sub(
+            r"^(?:(?:proposed\s+)?commit\s+message|message|subject)[:\-]\s*",
+            "",
+            subject,
+            flags=re.IGNORECASE,
+        )
+        subject = re.sub(r"^[-*•]\s+", "", subject)
+        subject = re.sub(r"^\d+\.\s+", "", subject)
+
+        # Collapse internal whitespace
+        subject = " ".join(subject.split())
+        return subject
 
     def chat(self, user_input: str) -> str:
         """Continue the conversation with user input."""

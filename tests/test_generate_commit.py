@@ -19,6 +19,7 @@ def mock_generator():
     with patch("helixcommit.cli.CommitGenerator") as mock:
         gen_instance = MagicMock()
         mock.return_value = gen_instance
+        gen_instance.to_subject.side_effect = lambda text: text
         yield gen_instance
 
 def test_generate_commit_no_staged_changes(mock_git_repo):
@@ -53,6 +54,27 @@ def test_generate_commit_success_flow(mock_git_repo, mock_generator):
     mock_git_repo.commit.assert_called_once()
     args = mock_git_repo.commit.call_args[0][0]
     assert "Feat: Add new feature" in args
+
+
+def test_generate_commit_trims_verbose_response(mock_git_repo, mock_generator):
+    # Setup: staged changes
+    mock_git_repo.get_diff.return_value = "diff content"
+
+    verbose = "Commit Message:\n- feat: add login flow\n\nDetails: updated screens"
+    mock_generator.generate.return_value = verbose
+    mock_generator.to_subject.side_effect = lambda text: "feat: add login flow"
+
+    result = runner.invoke(
+        app,
+        ["generate-commit", "--openrouter-api-key", "dummy"],
+        input="c\ny\n",
+    )
+
+    assert result.exit_code == 0
+    assert "feat: add login flow" in result.stdout
+
+    mock_generator.to_subject.assert_called()
+    mock_git_repo.commit.assert_called_once_with("feat: add login flow")
 
 def test_generate_commit_refine_flow(mock_git_repo, mock_generator):
     # Setup

@@ -797,6 +797,8 @@ def generate_commit(
 
     # 5. Interactive Loop
     while True:
+        commit_msg = generator.to_subject(response)
+
         # Display AI response in a styled panel
         response_panel = Panel(
             Text(response),
@@ -819,9 +821,6 @@ def generate_commit(
             raise typer.Exit(0)
 
         elif choice == "c":
-            # Use the AI response directly as the commit message
-            commit_msg = response.strip()
-
             # Show proposed message
             msg_panel = Panel(
                 Text(commit_msg, style="bold"),
