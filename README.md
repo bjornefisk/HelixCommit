@@ -28,7 +28,7 @@ pip install helixcommit
 helixcommit generate --unreleased --no-prs --format markdown > RELEASE_NOTES.md
 
 # Or for a specific tag range
-helixcommit generate --since-tag v1.2.0 --until-tag v1.3.0 --format html --out dist/release.html
+helixcommit generate --since-tag v1.2.0 --until-tag v1.2.1 --format html --out dist/release.html
 
 # Generate a commit message from staged changes (uses free AI model)
 helixcommit generate-commit
