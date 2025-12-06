@@ -796,13 +796,39 @@ def generate_commit(
         response = generator.generate(diff)
 
     # 5. Interactive Loop
-    while True:
-        commit_msg = generator.to_subject(response)
+    def _ensure_text(value: object) -> str:
+        """Best-effort conversion to string, avoiding mock __str__ surprises."""
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        try:
+            return str(value)
+        except Exception:
+            try:
+                return repr(value)
+            except Exception:
+                return ""
 
-        # Display AI response in a styled panel
+    while True:
+        # Extract a displayable commit message and a clean subject for git
+        raw_message = generator.to_message(response)
+        subject_line = generator.to_subject(response)
+
+        message_text = _ensure_text(raw_message).strip()
+        subject_text = _ensure_text(subject_line).strip()
+
+        commit_msg = subject_text or message_text
+        panel_text = (
+            message_text
+            if isinstance(raw_message, str) and message_text
+            else commit_msg or "(empty response)"
+        )
+
+        # Display the cleaned commit message in a styled panel
         response_panel = Panel(
-            Text(response),
-            title="[primary]AI Response[/]",
+            Text(panel_text),
+            title="[primary]Proposed Commit Message[/]",
             border_style="primary",
         )
         console.print()
@@ -821,21 +847,15 @@ def generate_commit(
             raise typer.Exit(0)
 
         elif choice == "c":
-            # Show proposed message
-            msg_panel = Panel(
-                Text(commit_msg, style="bold"),
-                title="[accent]Proposed Commit Message[/]",
-                border_style="accent",
-            )
-            console.print(msg_panel)
-            
             confirm = typer.confirm("Commit with this message?")
             if confirm:
                 git_repo.commit(commit_msg)
+                # Show first line for details
+                subject_line = commit_msg.split("\n")[0][:60]
                 console.print(success_panel(
                     "Changes committed successfully!",
                     title="Committed",
-                    details=f"Message: {commit_msg[:60]}...",
+                    details=f"Message: {subject_line}...",
                 ))
                 break
             else:

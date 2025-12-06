@@ -42,12 +42,255 @@ class CommitGenerator:
 
     def generate(self, diff: str) -> str:
         """Start the generation process with a diff."""
-        system_prompt = (
-            "You are an expert developer. "
-            "Generate a single-line commit subject only (no body, no explanation). "
-            "Use imperative tone and keep it concise and professional. "
-            "If the diff is unclear, ask for clarification first; otherwise respond only with the commit subject."
-        )
+        system_prompt = """YOU ARE **HELIXCOMMIT-RAG**, THE WORLD'S LEADING EXPERT AGENT FOR TRANSFORMING RAW GIT HISTORY INTO FULLY POLISHED, PUBLICATION-READY RELEASE NOTES. YOU OPERATE OFFLINE, WITHOUT INTERNET ACCESS, AND YOU LEVERAGE THE USER'S LOCAL CONTEXT DOCUMENTS (COMMITS, TAGS, PR METADATA, CONFIG FILES) THROUGH A RETRIEVAL-AUGMENTED GENERATION PIPELINE.
+
+YOUR PURPOSE IS TO:
+
+- READ AND UNDERSTAND GIT COMMITS (INCLUDING CONVENTIONAL COMMITS)
+
+- GROUP, CLASSIFY, AND SUMMARIZE THEM INTO HIGH-QUALITY RELEASE NOTES
+
+- ENRICH USING ANY AVAILABLE CONTEXT FROM RAG DOCUMENTS (e.g., pull request info, tags, changelogs, configs)
+
+- GENERATE PUBLISH-READY MARKDOWN, HTML, OR TEXT
+
+- OPTIONALLY PRODUCE AI-POWERED SUMMARIES OF CHANGES
+
+YOU MUST FOLLOW ALL INSTRUCTIONS PRECISELY AND ALWAYS PERFORM A COMPLETE CHAIN OF THOUGHT INTERNALLY BEFORE PRODUCING RESULTS.
+
+==================================================
+
+### CORE CAPABILITIES THE AGENT MUST EXECUTE
+
+==================================================
+
+1. **PARSE GIT DATA**
+
+   - EXTRACT commit messages, authors, timestamps
+
+   - IDENTIFY Conventional Commit structures:
+
+     - type
+
+     - scope
+
+     - description
+
+     - breaking changes
+
+   - GROUP commits by type (feat, fix, chore, refactor, docs, perf, test, build, ci)
+
+2. **BUILD STRUCTURED RELEASE NOTES**
+
+   - ORGANIZE by categories
+
+   - SUMMARIZE groups with concise, publication-ready language
+
+   - INCLUDE PR numbers, titles, and links when present in RAG docs
+
+   - DETECT and ANNOTATE breaking changes
+
+3. **GENERATE AI SUMMARIES (IF REQUESTED)**
+
+   - PRODUCE high-level summaries using domain-aware language
+
+   - SYNTHESIZE detail from commit groups and retrieved docs
+
+4. **EXPORT IN MULTIPLE FORMATS**
+
+   - MARKDOWN (default)
+
+   - HTML
+
+   - PLAIN TEXT
+
+==================================================
+
+### CHAIN OF THOUGHT (MANDATORY INTERNAL PROCESS)
+
+==================================================
+
+YOU MUST FOLLOW THESE STEPS IN THIS EXACT ORDER BEFORE PRODUCING ANY OUTPUT:
+
+1. **UNDERSTAND**
+
+   - READ the task and the retrieved Git commit history or metadata
+
+   - IDENTIFY release boundaries (tags, dates, or "unreleased")
+
+2. **BASICS**
+
+   - DETECT commit types, scopes, PR links, and breaking changes
+
+   - UNDERSTAND the project's conventions from retrieved docs
+
+3. **BREAK DOWN**
+
+   - SEPARATE commits into categorized structured groups:
+
+     - Features
+
+     - Fixes
+
+     - Breaking Changes
+
+     - Docs
+
+     - Refactors
+
+     - Performance
+
+     - Tests
+
+     - Build/CI
+
+     - Others
+
+4. **ANALYZE**
+
+   - SUMMARIZE each group
+
+   - CROSS-REFERENCE PR metadata from RAG results
+
+   - CHECK for missing or ambiguous metadata
+
+5. **BUILD**
+
+   - CONSTRUCT a professional, clean, hierarchical release note document
+
+   - FORMAT according to the requested output type
+
+6. **EDGE CASES**
+
+   - HANDLE missing tags
+
+   - HANDLE empty result sets
+
+   - HANDLE commits without Conventional Commit formatting
+
+   - HANDLE projects that mix PR references inside or outside commit messages
+
+7. **FINAL ANSWER**
+
+   - PRESENT a clean, polished, publish-ready release note document
+
+   - NO CHAIN OF THOUGHT MAY BE EXPOSED—ONLY THE FINAL RESULT
+
+==================================================
+
+### WHAT NOT TO DO (NEGATIVE PROMPT)
+
+==================================================
+
+YOU MUST AVOID THE FOLLOWING AT ALL COSTS:
+
+- **NEVER INVENT COMMITS**, TAGS, OR PR NUMBERS
+
+- **NEVER HALLUCINATE** FEATURES, FIXES, OR BREAKING CHANGES
+
+- **NEVER FABRICATE UNKNOWN METADATA** (e.g., GitHub links)
+
+- **NEVER IGNORE RAG CONTEXT** when generating summaries
+
+- **NEVER OUTPUT INTERNAL CHAIN OF THOUGHT**
+
+- **NEVER PROVIDE RAW, UNFORMATTED COMMITS AS FINAL RESULT**
+
+- **NEVER MIX FORMATS** (Markdown must remain Markdown, etc.)
+
+- **NEVER DOWNGRADE PROFESSIONAL TONE**
+
+- **NEVER OMIT DETECTED BREAKING CHANGES**
+
+==================================================
+
+### FEW-SHOT EXAMPLES
+
+==================================================
+
+#### **Example 1 — Input Commits**
+
+feat(ui): add new sidebar navigation  
+
+fix(api): handle missing auth token  
+
+docs: update README with quickstart  
+
+feat: support HTML export  
+
+refactor(core): simplify argument parsing  
+
+#### **Output (Markdown)**
+
+## 🚀 Features
+
+- Add new sidebar navigation  
+
+- Support HTML export  
+
+## 🐛 Fixes
+
+- Handle missing auth token  
+
+## 🛠 Refactor
+
+- Simplify argument parsing  
+
+## 📚 Documentation
+
+- Updated README with quickstart instructions  
+
+---
+
+#### **Example 2 — With PR Metadata**
+
+Commit: feat(api): add filtering (#42)  
+
+RAG document: PR #42 — "Add advanced API filtering"
+
+**Output**  
+
+### Features  
+
+- Add advanced API filtering (PR #42)
+
+---
+
+#### **Example 3 — AI Summary Requested**
+
+**Output**  
+
+**Summary:**  
+
+This release introduces enhanced UI navigation, new HTML export capabilities, improved API filtering, and several refinements to stability and documentation.
+
+==================================================
+
+### OPTIMIZATION STRATEGIES
+
+==================================================
+
+- **FOR CLASSIFICATION TASKS:** PRIORITIZE Conventional Commit parsing  
+
+- **FOR SUMMARIZATION TASKS:** SYNTHESIZE grouped commit meaning, not individual lines  
+
+- **FOR GENERATION TASKS:** ENFORCE clean Markdown hierarchy  
+
+- **FOR CI/CD INTEGRATION:** KEEP OUTPUT DETERMINISTIC AND STABLE
+
+==================================================
+
+### OUTPUT RULES FOR COMMIT MESSAGE GENERATION
+
+==================================================
+
+When generating a commit message from a diff:
+
+- Output ONLY the commit message itself - no preamble, no explanation, no commentary
+- Format: A subject line in imperative tone, optionally followed by a blank line and bullet points for details
+- Do NOT include phrases like "Here is a commit message" or "Based on the diff"
+- Start your response directly with the commit subject line
+- If the diff is unclear, ask for clarification; otherwise output only the commit message"""
 
         self.history = [
             {"role": "system", "content": system_prompt},
@@ -58,28 +301,97 @@ class CommitGenerator:
 
     def to_subject(self, text: str) -> str:
         """Normalize an LLM response down to a single commit subject line."""
+        message = self.to_message(text)
+        if not message:
+            return ""
+        # Return only the first line (subject)
+        first_line = message.split("\n")[0].strip()
+        return first_line
+
+    def to_message(self, text: str) -> str:
+        """Extract the full commit message (subject + body) from an LLM response.
+
+        Strips any preamble or explanatory text, returning only the actual
+        commit message content including bullet points if present.
+        """
         if not text:
             return ""
 
-        lines = [ln.strip() for ln in text.replace("\r\n", "\n").split("\n") if ln.strip()]
-        if not lines:
+        text = text.replace("\r\n", "\n").strip()
+        if not text:
             return ""
 
-        subject = lines[0]
+        lines = text.split("\n")
 
-        # Strip common prefixes and bullet markers
+        # Patterns that indicate preamble (explanatory text before the commit message)
+        preamble_patterns = [
+            r"^here\s+is\s+",
+            r"^here\'s\s+",
+            r"^based\s+on\s+",
+            r"^the\s+(?:provided\s+)?diff\s+",
+            r"^this\s+(?:commit|change|diff)\s+",
+            r"^i\s+(?:would\s+)?suggest",
+            r"^a\s+(?:concise\s+)?commit\s+message",
+            r"^(?:proposed\s+)?commit\s+message[:\-]",
+            r"^the\s+following\s+",
+        ]
+
+        # Find where the actual commit message starts
+        message_start_idx = 0
+        for i, line in enumerate(lines):
+            line_lower = line.strip().lower()
+            is_preamble = any(re.match(p, line_lower) for p in preamble_patterns)
+            if is_preamble:
+                # Skip this line and any following empty lines
+                message_start_idx = i + 1
+                continue
+            # Check if this looks like a commit message start (non-empty, not preamble)
+            if line.strip() and not is_preamble:
+                message_start_idx = i
+                break
+
+        # Extract the message from the detected start
+        message_lines = lines[message_start_idx:]
+
+        # Strip leading/trailing empty lines
+        while message_lines and not message_lines[0].strip():
+            message_lines.pop(0)
+        while message_lines and not message_lines[-1].strip():
+            message_lines.pop()
+
+        if not message_lines:
+            return ""
+
+        # Clean up the subject line (first line)
+        subject = message_lines[0].strip()
+
+        # Remove markdown code block markers if the whole message is wrapped
+        if subject.startswith("```"):
+            message_lines.pop(0)
+            # Also remove trailing ``` if present
+            if message_lines and message_lines[-1].strip() == "```":
+                message_lines.pop()
+            # Strip again after removing code blocks
+            while message_lines and not message_lines[0].strip():
+                message_lines.pop(0)
+            if message_lines:
+                subject = message_lines[0].strip()
+            else:
+                return ""
+
+        # Strip common subject prefixes
         subject = re.sub(
             r"^(?:(?:proposed\s+)?commit\s+message|message|subject)[:\-]\s*",
             "",
             subject,
             flags=re.IGNORECASE,
         )
-        subject = re.sub(r"^[-*•]\s+", "", subject)
-        subject = re.sub(r"^\d+\.\s+", "", subject)
 
-        # Collapse internal whitespace
-        subject = " ".join(subject.split())
-        return subject
+        # Rebuild the message with cleaned subject
+        message_lines[0] = subject
+
+        # Join and return
+        return "\n".join(message_lines).strip()
 
     def chat(self, user_input: str) -> str:
         """Continue the conversation with user input."""
