@@ -61,6 +61,17 @@ pytest -q
 - `OPENROUTER_API_KEY` – Required only when using `--use-llm --llm-provider openrouter`.
 - `GITHUB_TOKEN` – Optional; improves GitHub API rate limits when fetching PR data. Not required when using `--no-prs`.
 
+## Community & Support
+
+Join the HelixCommit community on Discord: https://discord.gg/UewHHrxNRE
+
+- Welcome: `#rules`, `#announcements` (release notes), `#roadmap`
+- Community: `#general`, `#showcase`, `#introductions`
+- Support: `#help-installation`, `#help-usage`, `#help-errors`, `#faq` (read-only)
+- Development: `#dev-general`, `#issues`, `#pull-requests`, `#architecture`, `#ai-summarization`
+- Testing: `#alpha-builds`, `#bug-reports`, `#perf-testing`
+- Documentation: `#docs-feedback`, `#examples`, `#tutorials`
+
 ## Development
 
 ```bash

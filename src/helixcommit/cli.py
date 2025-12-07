@@ -227,6 +227,18 @@ def _main_callback(
     
     Generate beautiful release notes from your Git commit history with AI-powered summarization.
     """
+    console = get_console()
+
+    # Show a lightweight community banner for interactive runs (avoids polluting redirected output)
+    if console.is_terminal:
+        console.print(
+            info_panel(
+                "[primary]Join the HelixCommit community on Discord[/]\n"
+                "Bug reports, release previews, docs feedback, and Q&A: "
+                "https://discord.gg/UewHHrxNRE",
+                title="Community & Support",
+            )
+        )
     return
 
 
