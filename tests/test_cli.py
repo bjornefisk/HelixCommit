@@ -481,7 +481,7 @@ def test_cli_generate_since_date(tmp_path):
 
 
 def test_cli_generate_until_date(tmp_path):
-    """Test --until-date filters commits by date.
+    """Test --until-date filters commits by date. 
     
     Uses a far future date to verify the option is accepted and works.
     """
@@ -514,7 +514,7 @@ def test_cli_generate_until_date(tmp_path):
 
 
 def test_cli_generate_date_range(tmp_path):
-    """Test combining --since-date and --until-date for a date range.
+    """Test combining --since-date and --until-date for a date range. 
     
     This test uses relative date expressions which are more reliable
     than trying to capture precise timestamps during test execution.
@@ -545,3 +545,38 @@ def test_cli_generate_date_range(tmp_path):
     # Both commits should be included (both are within the last week)
     assert "included feature" in result.output
     assert "initial commit" in result.output.lower() or "Generated changelog" in result.output
+
+def test_cli_generate_commit_shows_staged_files(tmp_path):
+    repo = git.Repo.init(tmp_path)
+
+    # Create and stage a new file
+    file1 = tmp_path / "file1.txt"
+    file1.write_text("content of file 1")
+    repo.index.add(["file1.txt"])
+
+    # Create and stage another new file in a subdirectory
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    file2 = subdir / "file2.py"
+    file2.write_text("print('hello')")
+    repo.index.add(["subdir/file2.py"])
+
+    result = runner.invoke(
+        app,
+        [
+            "generate-commit",
+            "--repo",
+            str(tmp_path),
+            "--openai-api-key", "dummy-key",  # Required by the command, but won't be used for diff display
+            "--no-confirm"  # To avoid interactive prompt
+        ]
+    )
+
+    # The command should exit with an error because of the dummy API key,
+    # but the staged files panel should still be displayed before that.
+    assert result.exit_code == 1, result.output
+    assert "Staged Files" in result.output
+    assert "- file1.txt" in result.output
+    assert "- subdir/file2.py" in result.output
+    assert "--- a/file1.txt" not in result.output  # Ensure diff is not shown
+    assert "+++ b/file1.txt" not in result.output  # Ensure diff is not shown

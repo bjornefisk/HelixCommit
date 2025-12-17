@@ -777,7 +777,13 @@ def generate_commit(
     # Show diff preview if requested
     if show_diff:
         console.print()
-        console.print(diff_panel(diff, title="Staged Changes", max_lines=30))
+        staged_files_output = git_repo._run_git("diff", "--cached", "--name-only").strip()
+        if staged_files_output:
+            staged_files = staged_files_output.splitlines()
+            panel_content = Text("\n".join(f"- {f}" for f in staged_files))
+            console.print(Panel(panel_content, title="[primary]Staged Files[/]", border_style="primary"))
+        else:
+            console.print(Panel(Text("No files staged."), title="[primary]Staged Files[/]", border_style="primary"))
         console.print()
 
     # 3. Setup AI - validate API key
