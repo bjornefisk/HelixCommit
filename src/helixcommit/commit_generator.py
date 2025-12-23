@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 try:  # pragma: no cover - optional dependency guard
     from openai import OpenAI, RateLimitError
@@ -40,7 +40,7 @@ class CommitGenerator:
         # Use the official OpenAI message param type so type checkers match the SDK
         self.history: List[ChatCompletionMessageParam] = []
 
-    def generate(self, diff: str) -> str:
+    def generate(self, diff: str, stream: bool = False, stream_callback: Optional[Callable[[str], None]] = None) -> str:
         """Start the generation process with a diff."""
         system_prompt = """YOU ARE **HELIXCOMMIT-RAG**, THE WORLD'S LEADING EXPERT AGENT FOR TRANSFORMING RAW GIT HISTORY INTO FULLY POLISHED, PUBLICATION-READY RELEASE NOTES. YOU OPERATE OFFLINE, WITHOUT INTERNET ACCESS, AND YOU LEVERAGE THE USER'S LOCAL CONTEXT DOCUMENTS (COMMITS, TAGS, PR METADATA, CONFIG FILES) THROUGH A RETRIEVAL-AUGMENTED GENERATION PIPELINE.
 
@@ -297,7 +297,11 @@ When generating a commit message from a diff:
             {"role": "user", "content": f"Here is the staged diff:\n\n{diff}"},
         ]
 
-        return self._call_llm()
+        # Set stream callback if provided
+        if stream and stream_callback:
+            self._stream_callback = stream_callback
+
+        return self._call_llm(stream=stream)
 
     def to_subject(self, text: str) -> str:
         """Normalize an LLM response down to a single commit subject line."""
@@ -398,7 +402,7 @@ When generating a commit message from a diff:
         self.history.append({"role": "user", "content": user_input})
         return self._call_llm()
 
-    def _call_llm(self, max_retries: int = 3) -> str:
+    def _call_llm(self, max_retries: int = 3, stream: bool = False) -> str:
         """Call the LLM and update history with exponential backoff retry logic."""
         last_error = None
         
@@ -407,10 +411,22 @@ When generating a commit message from a diff:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=self.history,
+                    stream=stream,
                 )
-                content = response.choices[0].message.content or ""
-                self.history.append({"role": "assistant", "content": content})
-                return content
+                if stream:
+                    content = ""
+                    for chunk in response:
+                        delta = chunk.choices[0].delta.content or ""
+                        content += delta
+                        # Yield partial content for streaming
+                        if hasattr(self, '_stream_callback') and self._stream_callback:
+                            self._stream_callback(delta)
+                    self.history.append({"role": "assistant", "content": content})
+                    return content
+                else:
+                    content = response.choices[0].message.content or ""
+                    self.history.append({"role": "assistant", "content": content})
+                    return content
             except RateLimitError as e:
                 last_error = e
                 if attempt < max_retries - 1:
