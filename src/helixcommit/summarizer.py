@@ -27,12 +27,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Iterable, Iterator, List, Optional, Sequence
 
 try:  # pragma: no cover - optional dependency guard
-    from openai import OpenAI
+    from openai import OpenAI  # type: ignore[import]
 except Exception:  # pragma: no cover - optional dependency guard
     OpenAI = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
-    from openai.types.chat import ChatCompletionMessageParam
+    ChatCompletionMessageParam = Dict[str, object]
 else:
     ChatCompletionMessageParam = Dict[str, object]  # type: ignore[misc,assignment]
 
