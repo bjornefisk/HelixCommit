@@ -687,7 +687,7 @@ def auto_commit(
         date_str = datetime.now().strftime("%Y-%m-%d")
         commit_message = f"{date_str}: {summary}"
 
-        typer.echo(f"\nProposed commit message:\n{commit_message}\n")
+
 
         choice = typer.prompt("Commit? (y)es, (n)o, (r)etry, (e)dit", default="y").lower()
 
