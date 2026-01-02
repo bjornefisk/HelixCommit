@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import re
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 try:  # pragma: no cover - optional dependency guard
     from openai import OpenAI, RateLimitError
 except ImportError:  # pragma: no cover - optional dependency guard
     OpenAI = None  # type: ignore[assignment]
-    RateLimitError = None  # type: ignore[assignment]
+    RateLimitError = Exception  # type: ignore[assignment]
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     # Precise type for messages passed to chat.completions.create
@@ -40,264 +40,22 @@ class CommitGenerator:
         # Use the official OpenAI message param type so type checkers match the SDK
         self.history: List[ChatCompletionMessageParam] = []
 
-    def generate(self, diff: str) -> str:
+    def generate(self, diff: str, stream: bool = False, stream_callback: Optional[Callable[[str], None]] = None) -> str:
         """Start the generation process with a diff."""
-        system_prompt = """YOU ARE **HELIXCOMMIT-RAG**, THE WORLD'S LEADING EXPERT AGENT FOR TRANSFORMING RAW GIT HISTORY INTO FULLY POLISHED, PUBLICATION-READY RELEASE NOTES. YOU OPERATE OFFLINE, WITHOUT INTERNET ACCESS, AND YOU LEVERAGE THE USER'S LOCAL CONTEXT DOCUMENTS (COMMITS, TAGS, PR METADATA, CONFIG FILES) THROUGH A RETRIEVAL-AUGMENTED GENERATION PIPELINE.
+        from .prompts import COMMIT_MESSAGE_SYSTEM_PROMPT
 
-YOUR PURPOSE IS TO:
-
-- READ AND UNDERSTAND GIT COMMITS (INCLUDING CONVENTIONAL COMMITS)
-
-- GROUP, CLASSIFY, AND SUMMARIZE THEM INTO HIGH-QUALITY RELEASE NOTES
-
-- ENRICH USING ANY AVAILABLE CONTEXT FROM RAG DOCUMENTS (e.g., pull request info, tags, changelogs, configs)
-
-- GENERATE PUBLISH-READY MARKDOWN, HTML, OR TEXT
-
-- OPTIONALLY PRODUCE AI-POWERED SUMMARIES OF CHANGES
-
-YOU MUST FOLLOW ALL INSTRUCTIONS PRECISELY AND ALWAYS PERFORM A COMPLETE CHAIN OF THOUGHT INTERNALLY BEFORE PRODUCING RESULTS.
-
-==================================================
-
-### CORE CAPABILITIES THE AGENT MUST EXECUTE
-
-==================================================
-
-1. **PARSE GIT DATA**
-
-   - EXTRACT commit messages, authors, timestamps
-
-   - IDENTIFY Conventional Commit structures:
-
-     - type
-
-     - scope
-
-     - description
-
-     - breaking changes
-
-   - GROUP commits by type (feat, fix, chore, refactor, docs, perf, test, build, ci)
-
-2. **BUILD STRUCTURED RELEASE NOTES**
-
-   - ORGANIZE by categories
-
-   - SUMMARIZE groups with concise, publication-ready language
-
-   - INCLUDE PR numbers, titles, and links when present in RAG docs
-
-   - DETECT and ANNOTATE breaking changes
-
-3. **GENERATE AI SUMMARIES (IF REQUESTED)**
-
-   - PRODUCE high-level summaries using domain-aware language
-
-   - SYNTHESIZE detail from commit groups and retrieved docs
-
-4. **EXPORT IN MULTIPLE FORMATS**
-
-   - MARKDOWN (default)
-
-   - HTML
-
-   - PLAIN TEXT
-
-==================================================
-
-### CHAIN OF THOUGHT (MANDATORY INTERNAL PROCESS)
-
-==================================================
-
-YOU MUST FOLLOW THESE STEPS IN THIS EXACT ORDER BEFORE PRODUCING ANY OUTPUT:
-
-1. **UNDERSTAND**
-
-   - READ the task and the retrieved Git commit history or metadata
-
-   - IDENTIFY release boundaries (tags, dates, or "unreleased")
-
-2. **BASICS**
-
-   - DETECT commit types, scopes, PR links, and breaking changes
-
-   - UNDERSTAND the project's conventions from retrieved docs
-
-3. **BREAK DOWN**
-
-   - SEPARATE commits into categorized structured groups:
-
-     - Features
-
-     - Fixes
-
-     - Breaking Changes
-
-     - Docs
-
-     - Refactors
-
-     - Performance
-
-     - Tests
-
-     - Build/CI
-
-     - Others
-
-4. **ANALYZE**
-
-   - SUMMARIZE each group
-
-   - CROSS-REFERENCE PR metadata from RAG results
-
-   - CHECK for missing or ambiguous metadata
-
-5. **BUILD**
-
-   - CONSTRUCT a professional, clean, hierarchical release note document
-
-   - FORMAT according to the requested output type
-
-6. **EDGE CASES**
-
-   - HANDLE missing tags
-
-   - HANDLE empty result sets
-
-   - HANDLE commits without Conventional Commit formatting
-
-   - HANDLE projects that mix PR references inside or outside commit messages
-
-7. **FINAL ANSWER**
-
-   - PRESENT a clean, polished, publish-ready release note document
-
-   - NO CHAIN OF THOUGHT MAY BE EXPOSED—ONLY THE FINAL RESULT
-
-==================================================
-
-### WHAT NOT TO DO (NEGATIVE PROMPT)
-
-==================================================
-
-YOU MUST AVOID THE FOLLOWING AT ALL COSTS:
-
-- **NEVER INVENT COMMITS**, TAGS, OR PR NUMBERS
-
-- **NEVER HALLUCINATE** FEATURES, FIXES, OR BREAKING CHANGES
-
-- **NEVER FABRICATE UNKNOWN METADATA** (e.g., GitHub links)
-
-- **NEVER IGNORE RAG CONTEXT** when generating summaries
-
-- **NEVER OUTPUT INTERNAL CHAIN OF THOUGHT**
-
-- **NEVER PROVIDE RAW, UNFORMATTED COMMITS AS FINAL RESULT**
-
-- **NEVER MIX FORMATS** (Markdown must remain Markdown, etc.)
-
-- **NEVER DOWNGRADE PROFESSIONAL TONE**
-
-- **NEVER OMIT DETECTED BREAKING CHANGES**
-
-==================================================
-
-### FEW-SHOT EXAMPLES
-
-==================================================
-
-#### **Example 1 — Input Commits**
-
-feat(ui): add new sidebar navigation  
-
-fix(api): handle missing auth token  
-
-docs: update README with quickstart  
-
-feat: support HTML export  
-
-refactor(core): simplify argument parsing  
-
-#### **Output (Markdown)**
-
-## 🚀 Features
-
-- Add new sidebar navigation  
-
-- Support HTML export  
-
-## 🐛 Fixes
-
-- Handle missing auth token  
-
-## 🛠 Refactor
-
-- Simplify argument parsing  
-
-## 📚 Documentation
-
-- Updated README with quickstart instructions  
-
----
-
-#### **Example 2 — With PR Metadata**
-
-Commit: feat(api): add filtering (#42)  
-
-RAG document: PR #42 — "Add advanced API filtering"
-
-**Output**  
-
-### Features  
-
-- Add advanced API filtering (PR #42)
-
----
-
-#### **Example 3 — AI Summary Requested**
-
-**Output**  
-
-**Summary:**  
-
-This release introduces enhanced UI navigation, new HTML export capabilities, improved API filtering, and several refinements to stability and documentation.
-
-==================================================
-
-### OPTIMIZATION STRATEGIES
-
-==================================================
-
-- **FOR CLASSIFICATION TASKS:** PRIORITIZE Conventional Commit parsing  
-
-- **FOR SUMMARIZATION TASKS:** SYNTHESIZE grouped commit meaning, not individual lines  
-
-- **FOR GENERATION TASKS:** ENFORCE clean Markdown hierarchy  
-
-- **FOR CI/CD INTEGRATION:** KEEP OUTPUT DETERMINISTIC AND STABLE
-
-==================================================
-
-### OUTPUT RULES FOR COMMIT MESSAGE GENERATION
-
-==================================================
-
-When generating a commit message from a diff:
-
-- Output ONLY the commit message itself - no preamble, no explanation, no commentary
-- Format: A subject line in imperative tone, optionally followed by a blank line and bullet points for details
-- Do NOT include phrases like "Here is a commit message" or "Based on the diff"
-- Start your response directly with the commit subject line
-- If the diff is unclear, ask for clarification; otherwise output only the commit message"""
+        system_prompt = COMMIT_MESSAGE_SYSTEM_PROMPT
 
         self.history = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Here is the staged diff:\n\n{diff}"},
         ]
 
-        return self._call_llm()
+        # Set stream callback if provided
+        if stream and stream_callback:
+            self._stream_callback = stream_callback
+
+        return self._call_llm(stream=stream)
 
     def to_subject(self, text: str) -> str:
         """Normalize an LLM response down to a single commit subject line."""
@@ -390,6 +148,25 @@ When generating a commit message from a diff:
         # Rebuild the message with cleaned subject
         message_lines[0] = subject
 
+        # Deduplicate subject if it appears again at the start of the body
+        def _norm_for_compare(s: str) -> str:
+            """Normalize a line for reliable comparison (lower, strip punctuation)."""
+            return re.sub(r"[^\w\s]", "", s.strip().lower())
+
+        if len(message_lines) > 1:
+            # Find first non-empty body line
+            idx = 1
+            while idx < len(message_lines) and not message_lines[idx].strip():
+                idx += 1
+            if idx < len(message_lines):
+                first_body_line = message_lines[idx].strip()
+                if _norm_for_compare(first_body_line) == _norm_for_compare(subject):
+                    # Remove the duplicate subject line from the body
+                    del message_lines[idx]
+                    # If the next line is an empty separator, remove it too
+                    if idx < len(message_lines) and not message_lines[idx].strip():
+                        del message_lines[idx]
+
         # Join and return
         return "\n".join(message_lines).strip()
 
@@ -398,19 +175,36 @@ When generating a commit message from a diff:
         self.history.append({"role": "user", "content": user_input})
         return self._call_llm()
 
-    def _call_llm(self, max_retries: int = 3) -> str:
+    def _call_llm(self, max_retries: int = 3, stream: bool = False) -> str:
         """Call the LLM and update history with exponential backoff retry logic."""
         last_error = None
         
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=self.history,
-                )
-                content = response.choices[0].message.content or ""
-                self.history.append({"role": "assistant", "content": content})
-                return content
+                if stream:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=self.history,
+                        stream=True,
+                    )
+                    content = ""
+                    for chunk in response:
+                        delta = chunk.choices[0].delta.content or ""
+                        content += delta
+                        # Yield partial content for streaming
+                        if hasattr(self, '_stream_callback') and self._stream_callback:
+                            self._stream_callback(delta)
+                    self.history.append({"role": "assistant", "content": content})
+                    return content
+                else:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=self.history,
+                        stream=False,
+                    )
+                    content = response.choices[0].message.content or ""
+                    self.history.append({"role": "assistant", "content": content})
+                    return content
             except RateLimitError as e:
                 last_error = e
                 if attempt < max_retries - 1:
@@ -437,3 +231,6 @@ When generating a commit message from a diff:
             except Exception as e:
                 # Other errors should fail immediately
                 raise
+        
+        # Should not reach here if max_retries > 0
+        raise RuntimeError("Failed to call LLM after all retries")

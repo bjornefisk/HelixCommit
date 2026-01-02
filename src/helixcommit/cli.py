@@ -687,7 +687,7 @@ def auto_commit(
         date_str = datetime.now().strftime("%Y-%m-%d")
         commit_message = f"{date_str}: {summary}"
 
-        typer.echo(f"\nProposed commit message:\n{commit_message}\n")
+
 
         choice = typer.prompt("Commit? (y)es, (n)o, (r)etry, (e)dit", default="y").lower()
 
@@ -809,9 +809,27 @@ def generate_commit(
         console.print(error_panel(str(e), title="Import Error"))
         raise typer.Exit(1) from None
 
-    # 4. Generate with spinner
-    with console.status("[progress.spinner]Analyzing changes with AI...[/]", spinner="dots"):
-        response = generator.generate(diff)
+    # 4. Generate with streaming
+    from rich.live import Live
+    from rich.text import Text
+    from rich.panel import Panel
+
+    # Initialize with empty content
+    current_content = ""
+    response_panel = Panel(
+        Text(current_content or "Generating..."),
+        title="[primary]Proposed Commit Message[/]",
+        border_style="primary",
+    )
+
+    def update_panel(delta: str) -> None:
+        nonlocal current_content
+        current_content += delta
+        response_panel.renderable = Text(current_content)
+        live.update(response_panel)
+
+    with Live(response_panel, console=console, refresh_per_second=10) as live:
+        response = generator.generate(diff, stream=True, stream_callback=update_panel)
 
     # 5. Interactive Loop
     def _ensure_text(value: object) -> str:
@@ -843,12 +861,8 @@ def generate_commit(
             else commit_msg or "(empty response)"
         )
 
-        # Display the cleaned commit message in a styled panel
-        response_panel = Panel(
-            Text(panel_text),
-            title="[primary]Proposed Commit Message[/]",
-            border_style="primary",
-        )
+        # Update the panel with final cleaned content
+        response_panel.renderable = Text(panel_text)
         console.print()
         console.print(response_panel)
         console.print()
